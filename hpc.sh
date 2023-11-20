@@ -11,22 +11,25 @@
 #SBATCH --mail-user=cc6858@nyu.edu
 
 source ~/.bashrc
-cd /scratch/gilbreth/"$USER"/AdaptiveEnsemble || exit
-conda activate d2l
+#cd /scratch/gilbreth/"$USER"/AdaptiveEnsemble || exit
+#conda activate d2l
 
-#source ~/chengc.sh
-#cd /scratch/gilbreth/"$USER"/cheng/AdaptiveEnsemble || exit
-#conda activate ./penv
+source ~/chengc.sh
+cd /scratch/gilbreth/"$USER"/cheng/EdgeFlex || exit
+conda activate ../AdaptiveEnsemble/penv
 
-PP=5
+#python train_100.py --ep 100 --id -1 --skip_quant
+
+PP=3
 NU=5
-NP=1
-EB=4096
-#python train_100.py --id -1 --nu $NU --pp $PP --ep 100 --n_parts $NP --n_embed $EB
-for i in {0..4}
+EB=1024
+for NP in 1 2 4 8
 do
-  echo "$i"
-  python train_100.py --id "$i" --nu $NU --pp $PP --resume --ep 100 --n_parts $NP --n_embed $EB
+  python train_100.py --id -1 --nu $NU --pp $PP --ep 100 --n_parts $NP --n_embed $EB
+  for i in {0..4}
+  do
+    echo "$i"
+    python train_100.py --id "$i" --nu $NU --pp $PP --resume --ep 100 --n_parts $NP --n_embed $EB
+  done
+  python test_100.py --pp $PP --n_parts $NP --n_embed $EB
 done
-#python train_100.py --id 0 --resume --ep 100
-python test_100.py --pp $PP --n_parts $NP

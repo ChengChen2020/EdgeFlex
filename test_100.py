@@ -67,6 +67,9 @@ def ensemble_test(bs=100, nu=5, pp=5, n_embed=4096, n_parts=2):
 
     net = EnsembleNet(res_stop=pp, ncls=100, skip_quant=False, n_embed=n_embed, n_parts=n_parts).to(device)
 
+    exp_name = f'0.0001_{pp}_100_{nu}_{n_embed}_{n_parts}_1.0_False_AdaptE'
+    exp_path = f'./checkpoint/ckpt_{exp_name}/'
+
     X = torch.rand(size=(2, 3, 32, 32)).to(device)
 
     print(net(X)[0].shape)
@@ -90,9 +93,8 @@ def ensemble_test(bs=100, nu=5, pp=5, n_embed=4096, n_parts=2):
 
     for num_of_ens in range(num_users):
 
-        checkpoint = torch.load(f'./{ckpt_path}/0.0001_{pp}_100_{nu}_{num_of_ens}_{n_embed}_{n_parts}_1.0_False_AdaptE_ckpt.pth')
-        # checkpoint = torch.load('./checkpoint/ckpt_74.49.pth')
-        checkpoint_2 = torch.load(f'./{ckpt_path}/0.0001_{pp}_100_{nu}_-1_{n_embed}_{n_parts}_1.0_False_AdaptE_ckpt.pth')
+        checkpoint = torch.load(f'{exp_path}/{num_of_ens}.pth')
+        checkpoint_2 = torch.load(f'{exp_path}/-1.pth')
         print(checkpoint['acc'])
         # print(checkpoint['epoch'])
         net.encoder.load_state_dict(checkpoint_2['encoder'])

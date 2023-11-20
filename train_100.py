@@ -44,8 +44,8 @@ def train(ep, resume):
     correct = 0
     total = 0
     for batch_idx, (inputs, targets) in enumerate(trainloader):
-        if len(inputs) != args.train_bs:
-            continue
+        # if len(inputs) != args.train_bs:
+        #     continue
         inputs, targets = inputs.to(device), targets.to(device)
         outputs, commit_loss = net(inputs)
         loss = criterion(outputs, targets) + commit_loss
@@ -92,16 +92,29 @@ def test(ep):
     acc = 100. * correct / total
     if acc > best_acc:
         print('Saving..')
-        state = {
-            'encoder': net.encoder.state_dict(),
-            'quantizer': net.quantizer.state_dict(),
-            'decoder': net.decoder.state_dict(),
-            'acc': acc,
-            'epoch': ep,
-        }
-        if not os.path.isdir('checkpoint'):
-            os.mkdir('checkpoint')
-        torch.save(state, f'./checkpoint/{exp_name}_ckpt.pth')
+        if args.skip_quant:
+            state = {
+                'encoder': net.encoder.state_dict(),
+                'decoder': net.decoder.state_dict(),
+                'acc': acc,
+                'epoch': ep,
+            }
+        else:
+            if args.id == -1:
+                state = {
+                    'encoder': net.encoder.state_dict(),
+                    'quantizer': net.quantizer.state_dict(),
+                    # 'decoder': net.decoder.state_dict(),
+                    'acc': acc,
+                    'epoch': ep,
+                }
+            else:
+                state = {
+                    'decoder': net.decoder.state_dict(),
+                    'acc': acc,
+                    'epoch': ep,
+                }
+        torch.save(state, f'{exp_path}/{args.id}.pth')
         best_acc = acc
 
     return acc
@@ -109,9 +122,15 @@ def test(ep):
 
 if __name__ == '__main__':
 
-    exp_name = (f'{args.lr}_{args.pp}_{args.ep}_{args.nu}_{args.id}_{args.n_embed}_{args.n_parts}_'
-                f'{args.commitment}_{args.skip_quant}_AdaptE')
+    if args.skip_quant:
+        exp_name = f'{args.lr}_{args.ep}_{args.skip_quant}_AdaptE'
+    else:
+        exp_name = (f'{args.lr}_{args.pp}_{args.ep}_{args.nu}_{args.n_embed}_{args.n_parts}_'
+                    f'{args.commitment}_{args.skip_quant}_AdaptE')
     print(args)
+
+    exp_path = f'./checkpoint/ckpt_{exp_name}/'
+    os.makedirs(exp_path, exist_ok=True)
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     best_acc = 0  # best test accuracy
@@ -140,8 +159,10 @@ if __name__ == '__main__':
         testset, batch_size=args.test_bs, shuffle=False, num_workers=1)
 
     if args.id == -1:
-        shared_idx = 34000 if args.nu == 16 else 40000
-        # shared_idx = 50000
+        if args.skip_quant:
+            shared_idx = 50000
+        else:
+            shared_idx = 34000 if args.nu == 16 else 40000
         shared_indices = np.arange(0, shared_idx)
         shared_set = torch.utils.data.Subset(trainset, shared_indices)
         trainloader = torch.utils.data.DataLoader(
@@ -170,8 +191,7 @@ if __name__ == '__main__':
 
         assert len(dataloaders) == args.nu
 
-    classes = ('plane', 'car', 'bird', 'cat', 'deer',
-               'dog', 'frog', 'horse', 'ship', 'truck')
+    classes = ('plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
 
     # Model
     print('==> Building model..')
@@ -187,7 +207,7 @@ if __name__ == '__main__':
         # Load checkpoint.
         print('==> Resuming from checkpoint..')
         assert os.path.isdir('checkpoint'), 'Error: no checkpoint directory found!'
-        checkpoint = torch.load(f'./checkpoint/0.0001_{args.pp}_100_{args.nu}_-1_{args.n_embed}_{args.n_parts}_1.0_False_AdaptE_ckpt.pth')
+        checkpoint = torch.load(f'{exp_path}/-1.pth')
 
         net.encoder.load_state_dict(checkpoint['encoder'])
         for param in net.encoder.parameters():
@@ -229,4 +249,4 @@ if __name__ == '__main__':
     plt.plot(np.arange(args.ep), acc_list)
     plt.xlabel('Epochs')
     plt.ylabel('Validation Accuracy')
-    plt.savefig(f'./checkpoint/{exp_name}_test_{best_acc}.png')
+    plt.savefig(f'{exp_path}/{args.id}_{best_acc:.3f}.png')
