@@ -98,9 +98,9 @@ def ensemble_test(pp=5, nu=5, n_embed=2048, n_parts=2):
                 X = net.decoder(X)
                 dec_time.append(time.time() - start_time - enc_time[-1] - quant_time[-1])
 
-        print(len(enc_time), enc_time[:10], sum(enc_time[1:]) / (len(enc_time) - 1))
-        print(len(quant_time), quant_time[:10], sum(quant_time[1:]) / (len(quant_time) - 1))
-        print(len(dec_time), dec_time[:10], sum(dec_time[1:]) / (len(dec_time) - 1))
+        print(len(enc_time), "{:.3f}".format(sum(enc_time[1:]) / (len(enc_time) - 1) * 1000.))
+        print(len(quant_time), "{:.3f}".format(sum(quant_time[1:]) / (len(quant_time) - 1) * 1000.))
+        print(len(dec_time), "{:.3f}".format(sum(dec_time[1:]) / (len(dec_time) - 1) * 1000.))
 
 
 if __name__ == "__main__":

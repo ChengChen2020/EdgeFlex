@@ -22,7 +22,7 @@ conda activate ../AdaptiveEnsemble/penv
 
 PP=3
 NU=5
-EB=2048
+EB=4096
 for NP in 1 2 4 8
 do
   python train_100.py --id -1 --nu $NU --pp $PP --ep 100 --n_parts $NP --n_embed $EB
