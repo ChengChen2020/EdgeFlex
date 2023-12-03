@@ -1,7 +1,7 @@
 #!/usr/bin/expect
 
 set pass "12345\n"
-set file "840968.tar.gz"
+set file "540968.tar.gz"
 set devices [list "cheng@128.46.74.158:/home/cheng" "dcsl@128.46.74.214:/home/dcsl" "xiang@128.46.74.171:/home/xiang"]
 # set devices [list "cheng@128.46.74.158:/home/cheng"]
 # set devices [list "dcsl@128.46.74.214:/home/dcsl"]

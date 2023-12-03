@@ -118,23 +118,24 @@ if __name__ == "__main__":
     #
     # print(get_num_params(vq))
 
-    net = EnsembleNet(res_stop=10).cuda()
+    net = EnsembleNet(res_stop=8, skip_quant=False).cuda()
     net.eval()
     X = torch.rand(size=(2, 3, 32, 32)).cuda()
+    X = net(X)
     # a = net.encoder(X)
     # print(a.shape)
 
-    import torch.profiler as profiler
-    with profiler.profile(
-            activities=[
-                profiler.ProfilerActivity.CPU,
-                profiler.ProfilerActivity.CUDA,
-            ],
-            schedule=profiler.schedule(wait=1, warmup=1, active=3, repeat=2),
-            record_shapes=True
-    ) as p:
-        with profiler.record_function("model_inference"):
-            a = net.encoder(X)
-    print(a.shape)
-    print(p.key_averages().table(
-        sort_by="self_cuda_time_total", row_limit=-1))
+    # import torch.profiler as profiler
+    # with profiler.profile(
+    #         activities=[
+    #             profiler.ProfilerActivity.CPU,
+    #             profiler.ProfilerActivity.CUDA,
+    #         ],
+    #         schedule=profiler.schedule(wait=1, warmup=1, active=3, repeat=2),
+    #         record_shapes=True
+    # ) as p:
+    #     with profiler.record_function("model_inference"):
+    #         a = net.encoder(X)
+    # print(a.shape)
+    # print(p.key_averages().table(
+    #     sort_by="self_cuda_time_total", row_limit=-1))

@@ -1,6 +1,10 @@
+import pickle
 import numpy as np
+import matplotlib.pyplot as plt
 
-### Worker, AP, Master
+from helper import get_mcs, get_data_rate
+
+# Worker, AP, Master
 
 # encourage collaboration
 
@@ -17,131 +21,227 @@ import numpy as np
 
 # torch arrays GPU-->CPU, packets
 
-# [NX, AGX]
-
-edevices = {0:'AGX', 1:'TX2', 2:'NX'}
-ed = np.random.choice(np.arange(2), 5)
-
-
-
 # PP (3, 5, 8), NP(1, 2, 4, 8), Inference time , Data size, Accuracy list (AGX, TX2, NX)
 # 3 * 4 * 3 = 36
-5: 1: [4.392, 4.166, 10.449], 32 * 16 * 16 * 4 * 8, 
-   8: [],
-3: 1: [], 24 * 16 * 16 * 4 * 8, 1(8) * 16 * 16 * 12
-8: 1: [], 64 * 8 * 8 * 4 * 8, 1(8) * 8 * 8 * 12
+# 5: 1: [4.392, 4.166, 10.449], 32 * 16 * 16 * 4 * 8,
+#    8: [],
+# 3: 1: [], 24 * 16 * 16 * 4 * 8, 1(8) * 16 * 16 * 12
+# 8: 1: [], 64 * 8 * 8 * 4 * 8, 1(8) * 8 * 8 * 12
+
+# Data Size in Bytes
+size_dict = {
+    3: 16 * 16 / 8,
+    5: 16 * 16 / 8,
+    8: 8 * 8 / 8
+}
+
+# point, embed, part
+with open('accuracy.pkl', 'rb') as f:
+    accuracy_dict = pickle.load(f)
+
+# device, point, embed, part
+# encoding, quantization, decoding
+with open('latency.pkl', 'rb') as f:
+    latency_dict = pickle.load(f)
+
+
+def action(states, agent):
+    return agent.select_action(states)
 
 
 class Master:
-	def __init__(self, possion_lambda, sla):
-		self.left_task_num = np.random.poisson(self.possion_lambda)
-		self.left_task_num = max(1, self.left_task_num)
-		self.total_task = self.left_task_num
-		self.sla = sla
+    def __init__(self, poisson_lambda, sla, device, test=False):
+        self.left_task_num = np.random.poisson(poisson_lambda)
+        self.left_task_num = max(1, self.left_task_num)
+        self.total_task = self.left_task_num
+        self.sla = sla
+        self.device = device
+        self.test = test
+        self.wl = 20
 
-	def statistic_init(self):
-		self.time_used = 0
-		self.finished_num = 0
+    def statistic_init(self):
+        self.time_used = 0
+        self.finished_num = 0
 
-	def start_task(self):
-		'''start a new task'''
-		if self.left_task_num == 0:
-		   raise RuntimeError('No tasks left')
-		data_size, infer_latency = get_data(self.point, self.part, self.device)
-		self.time_left = infer_latency
-		self.data_left = data_size
+    def start_task(self):
+        """start a new task"""
+        if self.left_task_num == 0:
+            raise RuntimeError('No tasks left')
+        self.encoding_latency, self.quantization_latency, self.decoding_latency = latency_dict(
+            (self.device, self.point, self.embed, self.part))
 
+    def action_init(self):
+        if self.test:
+            self.point = 5
+            self.part = 1
+            self.embed = 2048
+            self.involve = 15  # [1,1,1,1]
+        else:
+            self.point = np.random.choice([3, 5, 8])
+            self.part = np.random.choice([1, 2, 4, 8])
+            self.embed = np.random.choice([1024, 2048, 4096])
+            self.involve = np.random.choice(np.arange(15))
 
-	def action_init(self):
-		if self.test:
-			self.point = 5
-			self.part = 1
-			self.involve = 15 # [1,1,1,1]
-		else:
-			self.point = np.random.choice(np.arange(10))
-			self.part = np.random.choice([1, 2, 4, 8])
-			self.involve = np.random.choice(np.arange(15))
+        return self.point, self.part, self.embed, self.involve
+
+    def working_load(self):
+        self.wl = self.wl - np.random.poisson(10) + np.random.poisson(10)
+        return self.wl
 
 
 class Worker:
-	def __init__(self, snr, device=0):
-		self.decode_latency = get_data(self.device, self.point)
+    def __init__(self, device=0):
+        self.curr = 0
+        self.offload_size = np.random.normal(10000, 500)
+        self.involve = False
+        self.device = device
+        self.wl = 20
 
-	def get_states(self):
-		self.snr = np.random.normal(25, 5)
-		self.wl = np.random.poisson(20)
-		self.decode_latency *= 1 + self.wl / 100
-		return self.snr, self.decode_latency
+    def working_load(self):
+        self.wl = self.wl - np.random.poisson(10) + np.random.poisson(10)
+        return self.wl
 
 
 class Env:
-	def __init__(self, slot_time, num_users, worker_params, master_params, beta=0.5, total_band=100):
-		self.num_users = num_users
-		self.workers = [Worker(**worker_params) for _ in range(num_users)]
-		self.master = Master(**master_params)
-		self.slot_time = slot_time
-		self.total_band = total_band
-		self.beta = beta
+    def __init__(self, sla, poisson_lambda, num_users=5, beta=0.1, total_band=100, slot_time=500):
+        e_devices = {0: 'AGX', 1: 'TX2', 2: 'NX'}
+        self.users = np.random.choice(np.arange(2), num_users)
+        self.num_users = num_users
+        self.num_workers = num_users - 1
+        self.workers = [Worker(self.users[i]) for i in range(1, num_users)]
+        self.master = Master(poisson_lambda, sla, self.users[0])
+        self.slot_time = slot_time
+        self.total_band = total_band
+        self.beta = beta
 
-	def schedule_init(self):
-		for u in self.workers:
-			u.band = self.total_band / self.num_users
+    def schedule_pf(self):
+        for u in self.workers:
+            # Current slot throughput / History throughput
+            u.weight = u.curr / u.offload_size
+        sum_weights = sum([u.weight for u in self.workers if u.involve])
+        for u in self.workers:
+            if u.involve:
+                u.band = self.total_band * u.weight / sum_weights
+        # print([u.band for u in self.workers if u.involve])
 
-	def schedule_pf(self):
-		for u in self.workers:
-			# Current slot throughput / History throughput
-			u.weight = u.curr / u.hist
-		sum_weights = [u.weight for u in self.workers if u.involve]
-		for u in self.workers:
-			if u.involve:
-				u.band = self.total_band * u.weight / sum_weights
+    def step(self, action):
 
-	def offload_latency(self):
-		# infer_latency
-		data_size, encode_latency = get_data(self.point, self.part)
-		for u in self.workers:
-			if u.involve:
-				snr, decode_latency = u.get_states()
-				# bandwidth_Hz * modulation_efficiency * coding_rate * (1 - loss_rate)
-				data_rate = u.band * 6 * 0.75 * (1 - 0.001 * (10 ** (-snr / 10))) ** (1500 * 8)
-				u.offload_latency = data_size / data_rate
+        point, part, embed, involve = action
 
+        data_size = size_dict[point] * part * np.log2(embed)
+        involve_vec = f'{involve:04b}'
+        involve_sum = sum(map(int, involve_vec))
 
-	def get_states(self):
-		state = []
-		for u in self.workers:
-			if u.involve:
-				state.append(u.decode_latency)
-				state.append(u.offload_latency)
-			else:
-				state.append()
-		return state
+        tct = 0.0
+        acc = accuracy_dict[(point, embed, part)][involve_sum]
+        master_enc, master_quant, master_dec = latency_dict[(self.master.device, point, embed, part)]
+        master_working_coeff = 1 + self.master.working_load() / 100
 
-	def get_rewards(self):
-		energy = np.mean([u.energy_used for u in self.UEs])
-		finished = np.mean([u.finished_num for u in self.UEs])
-		avg_e = energy / max(finished, 0.8)
-		avg_t = self.slot_time / max(finished, 0.8)
-		reward = self.master.sla - acc - self.beta * tct
-		return reward
+        master_enc *= master_working_coeff
+        master_quant *= master_working_coeff
+        master_dec *= master_working_coeff
 
-	def step(self, action):
-		if self.is_done():
-            done = True
+        tct += master_enc + master_quant
 
-		state = self.get_state()
-        reward = self.get_reward()
+        for i in range(self.num_workers):
+            if involve_vec[i] == '1':
+                self.workers[i].involve = True
+                self.workers[i].curr = data_size
+            else:
+                self.workers[i].involve = False
 
-        return state, reward, done, info
+        self.schedule_pf()
+
+        for u in self.workers:
+            if u.involve:
+                _, _, dec = latency_dict[(u.device, point, embed, part)]
+                u.offload_size += data_size
+                u.dec = dec * (1 + u.working_load() / 100)
+                snr = np.random.normal(25, 5)
+                mcs, per = get_mcs(snr)
+                data_rate = get_data_rate(u.band, mcs, per)
+                u.trans = data_size / data_rate
+
+        dec_trans = max([u.dec + u.trans for u in self.workers if u.involve] + [master_dec])
+        tct += dec_trans
+
+        # print(acc - self.master.sla)
+        # print(self.beta * tct, master_enc, master_quant, dec_trans)
+
+        # state = self.get_state()
+        reward = acc - self.master.sla - self.beta * tct
+
+        self.master.left_task_num -= 1
+
+        done = True if self.is_done() else False
+
+        # DIM = 11
+        state = []
+        for u in self.workers:
+            if u.involve:
+                state.append(u.dec)
+                state.append(u.trans)
+            else:
+                state.extend([0, 0])
+        state.extend([master_enc, master_quant, master_dec])
+
+        return state, reward, done
 
     def is_done(self):
-    	if self.master.left_task_num == 0:
-    		return True
-    	return False
+        if self.master.left_task_num == 0:
+            return True
+        return False
 
 
+if __name__ == '__main__':
+    ed = np.random.choice(np.arange(2), 5)
+    master_params = {
+        'poisson_lambda': 200,
+        'sla': 75
+    }
+    worker_params = {
+        'device': 0
+    }
+    # Env(500, 5, **master_params, **worker_params)
+    # somelists = [
+    #     [5, 3, 8],
+    #     [1024, 2048, 4096],
+    #     [1, 2, 4, 8]
+    # ]
+    #
+    #
+    # data = {}
 
+    # with open('/Users/chen4384/Desktop/accuracy.txt') as f:
+    #     lines = [line.rstrip() for line in f]
+    #
+    # for i, element in enumerate(itertools.product(*somelists)):
+    #     data[element] = tuple(float(x) for x in lines[i].split(','))
+    #
+    # print(data[(5, 2048, 2)])
 
+    # with open('accuracy.pkl', 'wb') as f:
+    #     pickle.dump(data, f)
+
+    # with open('accuracy.pkl', 'rb') as f:
+    #     loaded_dict = pickle.load(f)
+    # reward_list = []
+    # tct_list = []
+    # acc_list = []
+    # max_num_episodes = 1
+    # for episode in range(max_num_episodes):
+    #     env = Env(sla=np.random.choice(np.arange(70, 80)), poisson_lambda=500)
+    #     while not env.is_done():
+    #         reward, tct, acc, _ = env.step(env.master.action_init())
+    #
+    #         reward_list.append(reward)
+    #         tct_list.append(tct)
+    #
+    # print(len(reward_list))
+    # plt.plot(reward_list)
+    # # plt.xlabel('Step')
+    # # plt.ylabel('Reward')
+    # plt.savefig('Reward.png')
 
 
 

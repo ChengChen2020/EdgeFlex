@@ -10,7 +10,7 @@
         </fileTransfer>
       </webServer>
       <webServer id="61f1678d-d95b-4449-a69d-7ac692490823" name="gilbreth_b">
-        <fileTransfer rootFolder="/scratch/gilbreth/chen4384" accessType="SFTP" host="gilbreth.rcac.purdue.edu" port="22" sshConfigId="2dbfcf74-c21e-4b93-ba6c-153ed5da2403" sshConfig="chen4384@gilbreth.rcac.purdue.edu:22 password">
+        <fileTransfer rootFolder="/scratch/gilbreth/chen4384" accessType="SFTP" host="gilbreth.rcac.purdue.edu" port="22" sshConfigId="2dbfcf74-c21e-4b93-ba6c-153ed5da2403" sshConfig="chen4384@gilbreth.rcac.purdue.edu:22 key" keyPair="true">
           <advancedOptions>
             <advancedOptions dataProtectionLevel="Private" keepAliveTimeout="0" passiveMode="true" shareSSLContext="true" />
           </advancedOptions>

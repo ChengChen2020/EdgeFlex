@@ -1,6 +1,8 @@
 .DS_Store
 *.pth
 *.tar.gz
+*.png
+*.pkl
 
 ./idea/
 __pycache__/

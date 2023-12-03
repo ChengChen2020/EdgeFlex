@@ -56,7 +56,7 @@ def ensemble_test(pp=5, nu=5, n_embed=2048, n_parts=2):
     net = EnsembleNet(res_stop=pp, ncls=100, skip_quant=False, n_embed=n_embed, n_parts=n_parts).to(device)
 
     exp_name = f'0.0001_{pp}_100_{nu}_{n_embed}_{n_parts}_1.0_False_AdaptE'
-    exp_path = f'./checkpoint/ckpt_{exp_name}/'
+    exp_path = f'./checkpoint/ckpt_{exp_name}'
 
     X = torch.rand(size=(2, 3, 32, 32)).to(device)
     print(net(X)[0].shape)
