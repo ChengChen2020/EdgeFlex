@@ -36,12 +36,12 @@ size_dict = {
 }
 
 # point, embed, part
-with open('accuracy.pkl', 'rb') as f:
+with open('./env/accuracy.pkl', 'rb') as f:
     accuracy_dict = pickle.load(f)
 
 # device, point, embed, part
 # encoding, quantization, decoding
-with open('latency.pkl', 'rb') as f:
+with open('./env/latency.pkl', 'rb') as f:
     latency_dict = pickle.load(f)
 
 
@@ -58,6 +58,9 @@ class Master:
         self.device = device
         self.test = test
         self.wl = 20
+        self.enc = []
+        self.dec = []
+        self.quant = []
 
     def statistic_init(self):
         self.time_used = 0
@@ -96,6 +99,8 @@ class Worker:
         self.involve = False
         self.device = device
         self.wl = 20
+        self.trans = []
+        self.dec = []
 
     def working_load(self):
         self.wl = self.wl - np.random.poisson(10) + np.random.poisson(10)
@@ -103,13 +108,13 @@ class Worker:
 
 
 class Env:
-    def __init__(self, sla, poisson_lambda, num_users=5, beta=0.1, total_band=100, slot_time=500):
+    def __init__(self, sla, poisson_lambda, num_users=5, beta=0.1, total_band=100, slot_time=500, test=False):
         e_devices = {0: 'AGX', 1: 'TX2', 2: 'NX'}
         self.users = np.random.choice(np.arange(2), num_users)
         self.num_users = num_users
         self.num_workers = num_users - 1
         self.workers = [Worker(self.users[i]) for i in range(1, num_users)]
-        self.master = Master(poisson_lambda, sla, self.users[0])
+        self.master = Master(poisson_lambda, sla, self.users[0], test=test)
         self.slot_time = slot_time
         self.total_band = total_band
         self.beta = beta
@@ -141,6 +146,10 @@ class Env:
         master_quant *= master_working_coeff
         master_dec *= master_working_coeff
 
+        self.master.enc.append(master_enc)
+        self.master.quant.append(master_quant)
+        self.master.dec.append(master_dec)
+
         tct += master_enc + master_quant
 
         for i in range(self.num_workers):
@@ -156,36 +165,48 @@ class Env:
             if u.involve:
                 _, _, dec = latency_dict[(u.device, point, embed, part)]
                 u.offload_size += data_size
-                u.dec = dec * (1 + u.working_load() / 100)
+                # u.dec = dec * (1 + u.working_load() / 100)
                 snr = np.random.normal(25, 5)
                 mcs, per = get_mcs(snr)
                 data_rate = get_data_rate(u.band, mcs, per)
-                u.trans = data_size / data_rate
+                # u.trans = data_size / data_rate
 
-        dec_trans = max([u.dec + u.trans for u in self.workers if u.involve] + [master_dec])
+                u.dec.append(dec * (1 + u.working_load() / 100))
+                u.trans.append(data_size / data_rate)
+            else:
+                u.dec.append(0)
+                u.trans.append(0)
+
+        dec_trans = max([u.dec[-1] + u.trans[-1] for u in self.workers] + [master_dec])
         tct += dec_trans
 
         # print(acc - self.master.sla)
         # print(self.beta * tct, master_enc, master_quant, dec_trans)
 
         # state = self.get_state()
-        reward = acc - self.master.sla - self.beta * tct
+        reward = (acc - self.master.sla) / 10. - self.beta * tct / 100.
 
         self.master.left_task_num -= 1
 
         done = True if self.is_done() else False
 
-        # DIM = 11
+        # DIM = 23
         state = []
         for u in self.workers:
-            if u.involve:
-                state.append(u.dec)
-                state.append(u.trans)
-            else:
-                state.extend([0, 0])
+            state.append(u.dec[-1])
+            state.append(u.trans[-1])
+            state.append(np.mean(u.dec))
+            state.append(np.mean(u.trans))
         state.extend([master_enc, master_quant, master_dec])
+        state.extend([np.mean(self.master.enc), np.mean(self.master.quant), np.mean(self.master.dec)])
+        state.append(self.master.sla)
 
-        return state, reward, done
+        info = {
+            'acc_advantage': acc - self.master.sla,
+            'task_completion_time': tct
+        }
+
+        return state, reward, done, info
 
     def is_done(self):
         if self.master.left_task_num == 0:

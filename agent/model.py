@@ -2,7 +2,7 @@ import torch.nn as nn
 
 
 class Actor(nn.Module):
-    def __init__(self, num_states=11, num_points=3, num_parts=4, num_embeds=3):
+    def __init__(self, num_states=11, num_points=3, num_parts=4, num_embeds=3, num_involve=16):
         super(Actor, self).__init__()
         self.base = nn.Sequential(nn.Linear(num_states, 256),
                                   nn.ReLU(),
@@ -20,15 +20,20 @@ class Actor(nn.Module):
                                           nn.ReLU(),
                                           nn.Linear(64, num_embeds),
                                           nn.Softmax(dim=-1))
+        self.involve_header = nn.Sequential(nn.Linear(128, 64),
+                                            nn.ReLU(),
+                                            nn.Linear(64, num_involve),
+                                            nn.Softmax(dim=-1))
 
     def forward(self, x):
         code = self.base(x)
         prob_points = self.point_header(code)
-        prob_parts = self.channel_header(code)
-        prob_embeds = self.embed_header
+        prob_parts = self.part_header(code)
+        prob_embeds = self.embed_header(code)
+        prob_involve = self.involve_header(code)
         # power_mu = self.power_mu_header(code) * (self.pmax - 1e-10) + 1e-10
         # power_sigma = self.power_sigma_header(code)
-        return prob_points, prob_parts, prob_embeds
+        return prob_points, prob_parts, prob_embeds, prob_involve
 
 
 class Critic(nn.Module):
