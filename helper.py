@@ -247,19 +247,22 @@ MCS_mapping = [
 ]
 
 if __name__ == '__main__':
-    mean, res = get_statistics()
-
-    for i in range(10):
-        snr = np.random.normal(mean, res)
-        print(snr, get_mcs(snr))
-
-    # print(get_data_rate(20, 11))
-
-    import matplotlib.pyplot as plt
-
-    snr_list = list(np.arange(-0.5, 30.5, .1))
-    data_rate_list = [get_data_rate(20, get_mcs(snr)[0], get_mcs(snr)[1]) for snr in snr_list]
-    plt.plot(snr_list, data_rate_list)
-    plt.xlabel('SNR')
-    plt.ylabel('throughput')
-    plt.savefig('snr_to_data_rate_mapping.png')
+    # mean, res = get_statistics()
+    #
+    # for i in range(10):
+    #     snr = np.random.normal(mean, res)
+    #     print(snr, get_mcs(snr))
+    #
+    # # print(get_data_rate(20, 11))
+    #
+    # import matplotlib.pyplot as plt
+    #
+    # snr_list = list(np.arange(-0.5, 30.5, .1))
+    # data_rate_list = [get_data_rate(20, get_mcs(snr)[0], get_mcs(snr)[1]) for snr in snr_list]
+    # plt.plot(snr_list, data_rate_list)
+    # plt.xlabel('SNR')
+    # plt.ylabel('throughput')
+    # plt.savefig('snr_to_data_rate_mapping.png')
+    mcs, per = get_mcs(30)
+    data_rate = get_data_rate(25, mcs, per)
+    print(data_rate)

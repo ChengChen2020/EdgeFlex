@@ -1,4 +1,5 @@
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
 from torch.distributions import Normal, Categorical
 
@@ -13,6 +14,8 @@ class PPO:
                            num_involve=num_involve).cuda()
         self.critic = Critic(num_states).cuda()
 
+        self.init_weights()
+
         self.optimizer_a = torch.optim.Adam(self.actor.parameters(), lr_a)
         self.optimizer_c = torch.optim.Adam(self.critic.parameters(), lr_c)
 
@@ -24,6 +27,17 @@ class PPO:
         self.batch_size = batch_size
         self.eps_clip = eps_clip
         self.w_entropy = w_entropy
+
+    def init_weights(self):
+        for layer in self.actor.modules():
+            if isinstance(layer, nn.Linear):
+                nn.init.kaiming_uniform_(layer.weight, mode='fan_in', nonlinearity='relu')
+                nn.init.zeros_(layer.bias)
+
+        for layer in self.critic.modules():
+            if isinstance(layer, nn.Linear):
+                nn.init.kaiming_uniform_(layer.weight, mode='fan_in', nonlinearity='relu')
+                nn.init.zeros_(layer.bias)
 
     def select_action(self, state, test=False):
         with torch.no_grad():

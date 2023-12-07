@@ -35,6 +35,24 @@ size_dict = {
     8: 8 * 8 / 8
 }
 
+min_acc = 67.97
+max_acc = 79.1
+
+min_enc_quant = 4.707
+max_enc_quant = 22.030000
+
+min_trans = 0.22
+max_trans = 34.13
+
+min_dec = 6.760
+max_dec = 20.045
+
+# Data_Size 80 ~ 3072
+# Band 360
+min_tct = 15
+max_tct = 75
+
+
 # point, embed, part
 with open('./env/accuracy.pkl', 'rb') as f:
     accuracy_dict = pickle.load(f)
@@ -57,7 +75,7 @@ class Master:
         self.sla = sla
         self.device = device
         self.test = test
-        self.wl = 20
+        self.wl = 40
         self.enc = []
         self.dec = []
         self.quant = []
@@ -88,7 +106,9 @@ class Master:
         return self.point, self.part, self.embed, self.involve
 
     def working_load(self):
-        self.wl = self.wl - np.random.poisson(10) + np.random.poisson(10)
+        self.wl = self.wl - 20 + np.random.poisson(20)
+        self.wl = min(90, self.wl)
+        self.wl = max(20, self.wl)
         return self.wl
 
 
@@ -98,19 +118,29 @@ class Worker:
         self.offload_size = np.random.normal(10000, 500)
         self.involve = False
         self.device = device
-        self.wl = 20
+        self.wl = 30
         self.trans = []
         self.dec = []
+        self.band = 25
 
     def working_load(self):
-        self.wl = self.wl - np.random.poisson(10) + np.random.poisson(10)
+        if self.device == 0:
+            pw = 20
+        elif self.device == 1:
+            pw = 10
+        else:
+            pw = 15
+        self.wl = self.wl - pw + np.random.poisson(10)
+        self.wl = min(80, self.wl)
+        self.wl = max(10, self.wl)
         return self.wl
 
 
 class Env:
     def __init__(self, sla, poisson_lambda, num_users=5, beta=0.1, total_band=100, slot_time=500, test=False):
-        e_devices = {0: 'AGX', 1: 'TX2', 2: 'NX'}
-        self.users = np.random.choice(np.arange(2), num_users)
+        self.e_devices = {0: 'AGX', 1: 'TX2', 2: 'NX'}
+        # self.users = np.random.choice(np.arange(2), num_users)
+        self.users = [0, 1, 1, 2, 0]
         self.num_users = num_users
         self.num_workers = num_users - 1
         self.workers = [Worker(self.users[i]) for i in range(1, num_users)]
@@ -118,6 +148,11 @@ class Env:
         self.slot_time = slot_time
         self.total_band = total_band
         self.beta = beta
+
+    def get_users(self):
+        for u in self.users:
+            print(self.e_devices[u], end=',')
+        print()
 
     def schedule_pf(self):
         for u in self.workers:
@@ -127,7 +162,7 @@ class Env:
         for u in self.workers:
             if u.involve:
                 u.band = self.total_band * u.weight / sum_weights
-        # print([u.band for u in self.workers if u.involve])
+        print([u.band for u in self.workers if u.involve])
 
     def step(self, action):
 
@@ -140,7 +175,7 @@ class Env:
         tct = 0.0
         acc = accuracy_dict[(point, embed, part)][involve_sum]
         master_enc, master_quant, master_dec = latency_dict[(self.master.device, point, embed, part)]
-        master_working_coeff = 1 + self.master.working_load() / 100
+        master_working_coeff = 1 + self.master.working_load() / 100.
 
         master_enc *= master_working_coeff
         master_quant *= master_working_coeff
@@ -159,32 +194,48 @@ class Env:
             else:
                 self.workers[i].involve = False
 
-        self.schedule_pf()
+        # self.schedule_pf()
 
         for u in self.workers:
+            snr = np.random.normal(25, 5)
+            mcs, per = get_mcs(snr)
+            u.mcs = mcs
+            u.per = per
             if u.involve:
                 _, _, dec = latency_dict[(u.device, point, embed, part)]
-                u.offload_size += data_size
-                # u.dec = dec * (1 + u.working_load() / 100)
-                snr = np.random.normal(25, 5)
-                mcs, per = get_mcs(snr)
-                data_rate = get_data_rate(u.band, mcs, per)
-                # u.trans = data_size / data_rate
+                # u.offload_size += data_size
 
-                u.dec.append(dec * (1 + u.working_load() / 100))
-                u.trans.append(data_size / data_rate)
+                u.band = self.total_band / involve_sum
+                u.data_rate = get_data_rate(u.band, mcs, per)
+
+                # print(data_size, u.data_rate)
+                u.working_load()
+                u.wl += 22 - point
+                u.wl *= (1 + (data_size - 80) / (3072 / 80))
+
+                u.dec.append(dec * (1 + u.wl / 100))
+                u.trans.append(data_size / u.data_rate)
             else:
-                u.dec.append(0)
-                u.trans.append(0)
+                u.working_load()
+                u.dec.append(0.)
+                u.trans.append(0.)
 
-        dec_trans = max([u.dec[-1] + u.trans[-1] for u in self.workers] + [master_dec])
+        dec_trans = max([u.dec[-1] + u.trans[-1] for u in self.workers if u.involve] + [master_dec])
         tct += dec_trans
 
         # print(acc - self.master.sla)
         # print(self.beta * tct, master_enc, master_quant, dec_trans)
 
         # state = self.get_state()
-        reward = (acc - self.master.sla) / 10. - self.beta * tct / 100.
+        # reward = (acc - self.master.sla) / 10. - self.beta * tct / 100.
+
+        acc_term = (acc - min_acc) / (max_acc - min_acc)
+        tct_term = (tct - min_tct) / (max_tct - min_tct)
+
+        reward = 1 if acc_term > 0.8 else 0
+        # reward = 1.5 * acc_term
+        reward -= tct_term
+        # print(reward)
 
         self.master.left_task_num -= 1
 
@@ -193,17 +244,35 @@ class Env:
         # DIM = 23
         state = []
         for u in self.workers:
-            state.append(u.dec[-1])
-            state.append(u.trans[-1])
-            state.append(np.mean(u.dec))
-            state.append(np.mean(u.trans))
-        state.extend([master_enc, master_quant, master_dec])
-        state.extend([np.mean(self.master.enc), np.mean(self.master.quant), np.mean(self.master.dec)])
-        state.append(self.master.sla)
+            # state.append(u.dec[-1])
+            # state.append(u.trans[-1])
+            state.append(u.wl / 100.)
+            state.append(u.mcs / 11.)
+            # non_zero_values = [value for value in u.dec if value != 0]
+            # if len(non_zero_values) == 0:
+            #     state.append(0)
+            # else:
+            #     mean_without_zeros = np.mean(non_zero_values)
+            #     state.append(mean_without_zeros)
+            # state.append(np.mean(u.trans))
+        # state.extend([master_enc, master_quant, master_dec])
+        state.append(self.master.wl / 100.)
+        state.append((data_size - 80.) / (3072. - 80.))
+        # state.extend([acc])
+        # state.append(data_size)
+        # state.append(self.total_band / (involve_sum + 1e-6))
+
+        # print(state)
+        # print(action)
+        # print(master_enc, master_quant, master_dec, dec_trans, tct)
+        # print(acc, tct_term)
+
+        # print(state)
+        # state.append(self.master.sla)
 
         info = {
-            'acc_advantage': acc - self.master.sla,
-            'task_completion_time': tct
+            'acc': acc_term,
+            'tct': tct_term
         }
 
         return state, reward, done, info
@@ -215,14 +284,16 @@ class Env:
 
 
 if __name__ == '__main__':
-    ed = np.random.choice(np.arange(2), 5)
-    master_params = {
-        'poisson_lambda': 200,
-        'sla': 75
-    }
-    worker_params = {
-        'device': 0
-    }
+    mcs, per = get_mcs(30)
+    print(mcs, per)
+    # ed = np.random.choice(np.arange(2), 5)
+    # master_params = {
+    #     'poisson_lambda': 200,
+    #     'sla': 75
+    # }
+    # worker_params = {
+    #     'device': 0
+    # }
     # Env(500, 5, **master_params, **worker_params)
     # somelists = [
     #     [5, 3, 8],

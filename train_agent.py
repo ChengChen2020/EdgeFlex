@@ -26,13 +26,15 @@ def train(args, agent, save_dir, logger, start_episode=0, start_step=0):
     global_episode = start_episode
     global_step = start_step
     # max_episode_step = int((args.poisson_lambda * 0.15) / args.slot_time)
-    max_episode_step = args.poisson_lambda
+    max_episode_step = args.poisson_lambda * 2
 
     reward_list = []
     actor_loss = []
     critic_loss = []
+
+    # best_reward = 0.0
     while True:
-        env = Env(sla=np.random.choice(np.arange(70, 80)), poisson_lambda=args.poisson_lambda)
+        env = Env(sla=np.random.choice(np.arange(70, 80)), poisson_lambda=args.poisson_lambda, beta=args.beta, total_band=100)
         actions = env.master.action_init()
         for j in range(max_episode_step):
 
@@ -47,6 +49,7 @@ def train(args, agent, save_dir, logger, start_episode=0, start_step=0):
             actions = agent.select_action(s_t)
 
             if global_step % args.step == 0:
+                env.get_users()
                 loss_a, loss_c = agent.update()
                 reward_list.append(test(global_step, agent, logger))
                 actor_loss.append(loss_a)
@@ -56,17 +59,6 @@ def train(args, agent, save_dir, logger, start_episode=0, start_step=0):
                 plt.xlabel('Episode')
                 plt.ylabel('Averaged episode reward')
                 plt.savefig('result/reward_record.jpg')
-
-                # plt.plot(loss_a)
-                # plt.xlabel('Episode')
-                # plt.ylabel('Averaged episode reward')
-                # plt.savefig('result/actor_loss.jpg')
-                #
-                # plt.plot(loss_c)
-                # plt.xlabel('Episode')
-                # plt.ylabel('Averaged episode reward')
-                # plt.savefig('result/critic_loss.jpg')
-                # print(loss_a, loss_c)
 
             if done:
                 global_episode += 1
@@ -81,26 +73,32 @@ def train(args, agent, save_dir, logger, start_episode=0, start_step=0):
 
 def test(step, agent, logger=None):
     done = False
-    env = Env(sla=np.random.choice(np.arange(70, 80)), poisson_lambda=500, test=True)
+    # env = Env(sla=np.random.choice(np.arange(70, 80)), poisson_lambda=500, test=True)
+    env = Env(sla=70, poisson_lambda=500, test=True, beta=args.beta, total_band=100)
+    # env.get_users()
     test_reward = 0.
-    acc_advantage = 0.
-    task_completion_time = 0.
+    acc_term = 0.
+    tct_term = 0.
     finished = 0
     actions = env.master.action_init()
+    # master_work_load = []
     while not done:
+        # master_work_load.append(env.master.working_load())
         s_t, r_t, done, info = env.step(actions)
         test_reward += r_t
-        acc_advantage += info['acc_advantage']
-        task_completion_time += info['task_completion_time']
+        acc_term += info['acc']
+        tct_term += info['tct']
         finished += 1
         actions = agent.select_action(s_t, test=True)
 
-    avg_acc_advantage = acc_advantage / finished
-    avg_task_completion_time = task_completion_time / finished
+    avg_acc_term = acc_term / finished
+    avg_tct_term = tct_term / finished
     avg_test_reward = test_reward / finished
     if logger is not None:
-        logger.info(f'step {step}, reward {test_reward:.4f}, ({avg_acc_advantage:.6f} {avg_task_completion_time:.6f})')
+        logger.info(f'step {step}, reward {avg_test_reward:.4f}, ({avg_acc_term:.6f} {avg_tct_term:.6f})')
 
+    # plt.plot(master_work_load)
+    # plt.savefig('work.jpg')
     return avg_test_reward
 
 
@@ -181,7 +179,7 @@ if __name__ == "__main__":
     # }
     agent_params = {
         'num_users': 5,
-        'num_states': 23,
+        'num_states': 10,
         'num_points': args.num_points,
         'num_parts': args.num_parts,
         'num_embeds': args.num_embeds,
