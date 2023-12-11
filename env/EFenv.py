@@ -80,17 +80,6 @@ class Master:
         self.dec = []
         self.quant = []
 
-    def statistic_init(self):
-        self.time_used = 0
-        self.finished_num = 0
-
-    def start_task(self):
-        """start a new task"""
-        if self.left_task_num == 0:
-            raise RuntimeError('No tasks left')
-        self.encoding_latency, self.quantization_latency, self.decoding_latency = latency_dict(
-            (self.device, self.point, self.embed, self.part))
-
     def action_init(self):
         if self.test:
             self.point = 5
@@ -105,9 +94,9 @@ class Master:
 
         return self.point, self.part, self.embed, self.involve
 
-    def working_load(self):
+    def bg_working_load(self):
         self.wl = self.wl - 20 + np.random.poisson(20)
-        self.wl = min(90, self.wl)
+        self.wl = min(60, self.wl)
         self.wl = max(20, self.wl)
         return self.wl
 
@@ -123,7 +112,7 @@ class Worker:
         self.dec = []
         self.band = 25
 
-    def working_load(self):
+    def bg_working_load(self):
         if self.device == 0:
             pw = 20
         elif self.device == 1:
@@ -131,7 +120,7 @@ class Worker:
         else:
             pw = 15
         self.wl = self.wl - pw + np.random.poisson(10)
-        self.wl = min(80, self.wl)
+        self.wl = min(50, self.wl)
         self.wl = max(10, self.wl)
         return self.wl
 
@@ -175,7 +164,10 @@ class Env:
         tct = 0.0
         acc = accuracy_dict[(point, embed, part)][involve_sum]
         master_enc, master_quant, master_dec = latency_dict[(self.master.device, point, embed, part)]
-        master_working_coeff = 1 + self.master.working_load() / 100.
+        self.master.bg_working_load()
+        self.master.wl += point
+        self.master.wl = min(100, self.master.wl)
+        master_working_coeff = 1 + self.master.wl / 100.
 
         master_enc *= master_working_coeff
         master_quant *= master_working_coeff
@@ -185,7 +177,10 @@ class Env:
         self.master.quant.append(master_quant)
         self.master.dec.append(master_dec)
 
-        tct += master_enc + master_quant
+        if involve_sum > 0:
+            tct += master_enc + master_quant
+        else:
+            tct += master_enc
 
         for i in range(self.num_workers):
             if involve_vec[i] == '1':
@@ -200,23 +195,21 @@ class Env:
             snr = np.random.normal(25, 5)
             mcs, per = get_mcs(snr)
             u.mcs = mcs
-            u.per = per
             if u.involve:
                 _, _, dec = latency_dict[(u.device, point, embed, part)]
-                # u.offload_size += data_size
 
                 u.band = self.total_band / involve_sum
                 u.data_rate = get_data_rate(u.band, mcs, per)
 
-                # print(data_size, u.data_rate)
-                u.working_load()
+                u.bg_working_load()
                 u.wl += 22 - point
-                u.wl *= (1 + (data_size - 80) / (3072 / 80))
+                u.wl += part * embed / 1024
+                u.wl = min(100, u.wl)
 
                 u.dec.append(dec * (1 + u.wl / 100))
                 u.trans.append(data_size / u.data_rate)
             else:
-                u.working_load()
+                u.bg_working_load()
                 u.dec.append(0.)
                 u.trans.append(0.)
 
@@ -229,13 +222,27 @@ class Env:
         # state = self.get_state()
         # reward = (acc - self.master.sla) / 10. - self.beta * tct / 100.
 
+        local_acc = 74
+        local_tct = master_enc + master_dec
+
         acc_term = (acc - min_acc) / (max_acc - min_acc)
         tct_term = (tct - min_tct) / (max_tct - min_tct)
 
-        reward = 1 if acc_term > 0.8 else 0
+        local_acc_term = (local_acc - min_acc) / (max_acc - min_acc)
+        local_tct_term = (local_tct - min_tct) / (max_tct - min_tct)
+
+        reward = 1 if acc_term >= self.master.sla else 0
+        if acc_term > self.master.sla:
+            reward -= (acc_term - self.master.sla)
         # reward = 1.5 * acc_term
         reward -= tct_term
         # print(reward)
+
+        local_reward = 1 if local_acc_term > self.master.sla else 0
+        if local_acc_term > self.master.sla:
+            local_reward -= (local_acc_term - self.master.sla)
+        # reward = 1.5 * acc_term
+        local_reward -= local_tct_term
 
         self.master.left_task_num -= 1
 
@@ -271,11 +278,11 @@ class Env:
         # state.append(self.master.sla)
 
         info = {
-            'acc': acc_term,
-            'tct': tct_term
+            'acc': acc,
+            'tct': tct
         }
 
-        return state, reward, done, info
+        return state, reward, done, info, local_reward
 
     def is_done(self):
         if self.master.left_task_num == 0:

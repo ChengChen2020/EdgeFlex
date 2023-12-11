@@ -18,4 +18,6 @@ source ~/chengc.sh
 cd /scratch/gilbreth/"$USER"/cheng/EdgeFlex || exit
 conda activate ../AdaptiveEnsemble/penv
 
-python train_agent.py
+python train_agent.py --sla 0.9 --beta 1
+python train_agent.py --sla 0.8 --beta 1
+python train_agent.py --sla 0.8 --beta 0.5

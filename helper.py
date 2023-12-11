@@ -1,4 +1,7 @@
+import os
+import logging
 import numpy as np
+
 
 global AwgnErrorTableLdpc1458
 
@@ -18,6 +21,19 @@ global AwgnErrorTableLdpc1458
 #                     return i, d_per
 #
 #     return -1, -1
+
+def setup_logger(logger_name, exp_path, level=logging.INFO):
+    l = logging.getLogger(logger_name)
+    formatter = logging.Formatter('%(asctime)s %(levelname)s : %(message)s')
+    fileHandler = logging.FileHandler(os.path.join(exp_path, 'output.log'), mode='w')
+    fileHandler.setFormatter(formatter)
+    streamHandler = logging.StreamHandler()
+    streamHandler.setFormatter(formatter)
+
+    l.setLevel(level)
+    l.addHandler(fileHandler)
+    l.addHandler(streamHandler)
+    return l
 
 
 def get_statistics():
@@ -255,14 +271,16 @@ if __name__ == '__main__':
     #
     # # print(get_data_rate(20, 11))
     #
-    # import matplotlib.pyplot as plt
-    #
-    # snr_list = list(np.arange(-0.5, 30.5, .1))
-    # data_rate_list = [get_data_rate(20, get_mcs(snr)[0], get_mcs(snr)[1]) for snr in snr_list]
-    # plt.plot(snr_list, data_rate_list)
-    # plt.xlabel('SNR')
-    # plt.ylabel('throughput')
-    # plt.savefig('snr_to_data_rate_mapping.png')
-    mcs, per = get_mcs(30)
-    data_rate = get_data_rate(25, mcs, per)
-    print(data_rate)
+    import matplotlib.pyplot as plt
+
+    snr_list = list(np.arange(-0.5, 30.5, .1))
+    data_rate_list = [get_data_rate(20, get_mcs(snr)[0], get_mcs(snr)[1]) for snr in snr_list]
+    plt.title('SNR to Data Rate for 20MHz channel')
+    plt.plot(snr_list, data_rate_list)
+    plt.xlabel('SNR(dB)')
+    plt.ylabel('Data Rate(Mbps)')
+    plt.savefig('snr_to_data_rate_mapping.png')
+    # mcs, per = get_mcs(30)
+    # print(mcs, per)
+    # data_rate = get_data_rate(25, mcs, per)
+    # print(data_rate)

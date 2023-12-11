@@ -79,7 +79,7 @@ def EnsembleNet(res_stop=5, ncls=10, skip_quant=True, n_embed=4096, n_parts=1, c
 
     for layer_idx, l in enumerate(mobilenet_v2.features):
         X = l(X)
-        # print(l.__class__.__name__, 'Output shape:\t', X.shape)
+        print(l.__class__.__name__, 'Output shape:\t', X.shape)
         if layer_idx <= res_stop:
             encoder_layers.append(l)
         else:
