@@ -36,12 +36,12 @@ def train(args, agent, save_dir, logger, start_episode=0, start_step=0):
             actions = agent.select_action(s_t)
 
             if global_step % args.step == 0:
-                env.get_users()
+                # env.get_users()
                 loss_a, loss_c = agent.update()
-                avg_reward, local_reward = test(global_step, agent, logger)
+                avg_reward, local_reward = test(args, global_step, agent, logger)
                 if avg_reward > best_reward:
                     best_reward = avg_reward
-                    agent.save_model(save_dir + '_ckpt.pt', args)
+                    agent.save_model(os.path.join(save_dir, 'ckpt.pt'), args)
 
                 reward_list.append(avg_reward)
                 local_reward_list.append(local_reward)
@@ -54,21 +54,21 @@ def train(args, agent, save_dir, logger, start_episode=0, start_step=0):
 
         if global_step > args.max_global_step:
             # test(args, global_episode, global_step, test_env, agent, logger)
-            plt.plot(reward_list, label='Flex')
+            plt.plot(reward_list, label='EdgeFlex')
             plt.plot(local_reward_list, label='Local')
             plt.xlabel('Episode')
             plt.legend()
             plt.ylabel('Averaged episode reward')
-            plt.savefig('result/reward_record.jpg')
+            plt.savefig(os.path.join(save_dir, 'reward_record.jpg'))
             break
 
     # agent.save_model(save_dir + 'ckp.pt', args)
 
 
-def test(step, agent, logger=None):
+def test(args, step, agent, logger=None):
     done = False
     # env = Env(sla=np.random.choice(np.arange(70, 80)), poisson_lambda=500, test=True)
-    env = Env(sla=70, poisson_lambda=400, test=True, beta=args.beta, total_band=100)
+    env = Env(sla=args.sla, poisson_lambda=400, test=True, beta=args.beta, total_band=100)
     # env.get_users()
     local_reward = 0.
     test_reward = 0.
@@ -105,7 +105,7 @@ def init_parser():
     # system
     parser.add_argument('--net', default='mobilenetv2', type=str)
     parser.add_argument('--poisson_lambda', default=500, type=int)
-    parser.add_argument('--sla', default=0.9, type=int)
+    parser.add_argument('--sla', default=0.9, type=float)
     parser.add_argument('--num_points', default=3, type=int)
     parser.add_argument('--num_parts', default=4, type=int)
     parser.add_argument('--num_embeds', default=3, type=int)

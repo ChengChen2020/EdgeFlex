@@ -160,7 +160,7 @@ if __name__ == '__main__':
 
     if args.id == -1:
         if args.skip_quant:
-            shared_idx = 50000
+            shared_idx = 35000 if args.nu == 16 else 42000
         else:
             shared_idx = 34000 if args.nu == 16 else 40000
         shared_indices = np.arange(0, shared_idx)

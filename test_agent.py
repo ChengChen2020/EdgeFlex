@@ -10,7 +10,7 @@ from helper import setup_logger
 
 def test(agent, logger=None):
     done = False
-    env = Env(sla=70, poisson_lambda=500, test=True, beta=args.beta, total_band=100)
+    env = Env(sla=args.sla, poisson_lambda=400, test=True, beta=args.beta, total_band=100)
     test_reward = 0.
     acc_term = 0.
     tct_term = 0.
@@ -18,9 +18,9 @@ def test(agent, logger=None):
     actions = env.master.action_init()
     while not done:
         # master_work_load.append(env.master.working_load())
-        s_t, r_t, done, info = env.step(actions)
+        s_t, r_t, done, info, _ = env.step(actions)
         # print(s_t)
-        # print(actions)
+        print(actions)
         test_reward += r_t
         acc_term += info['acc']
         tct_term += info['tct']
@@ -44,6 +44,7 @@ def init_parser():
     # system
     parser.add_argument('--net', default='mobilenetv2', type=str)
     parser.add_argument('--poisson_lambda', default=100, type=int)
+    parser.add_argument('--sla', default=0.9, type=float)
     parser.add_argument('--num_points', default=3, type=int)
     parser.add_argument('--num_parts', default=4, type=int)
     parser.add_argument('--num_embeds', default=3, type=int)
@@ -96,7 +97,7 @@ if __name__ == "__main__":
     }
 
     agent = PPO(**agent_params)
-    dic = torch.load('result/mobilenetv2_EdgeFlexckp.pt')
+    dic = torch.load('result/mobilenetv2_0.2_1.0_EdgeFlex/ckpt.pt')
     agent.load_model(dic['actor'], dic['critic'])
     agent.actor.eval()
     agent.critic.eval()

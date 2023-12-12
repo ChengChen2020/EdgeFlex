@@ -103,10 +103,10 @@ def ensemble_test(bs=100, nu=5, pp=5, n_embed=4096, n_parts=2):
         # best_acc = checkpoint['acc']
         # start_epoch = checkpoint['epoch']
 
-        print("????", test(net))
+        # print("????", test(net))
 
         net.eval()
-        print(num_of_ens)
+        # print(num_of_ens)
 
         with torch.no_grad():
             for b, (X_test, y_test) in enumerate(testloader):

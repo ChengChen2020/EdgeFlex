@@ -222,8 +222,10 @@ class Env:
         # state = self.get_state()
         # reward = (acc - self.master.sla) / 10. - self.beta * tct / 100.
 
-        local_acc = 74
+        local_acc = 76
         local_tct = master_enc + master_dec
+
+        # print(tct, local_tct)
 
         acc_term = (acc - min_acc) / (max_acc - min_acc)
         tct_term = (tct - min_tct) / (max_tct - min_tct)
@@ -238,11 +240,13 @@ class Env:
         reward -= tct_term
         # print(reward)
 
-        local_reward = 1 if local_acc_term > self.master.sla else 0
+        local_reward = 1 if local_acc_term >= self.master.sla else 0
         if local_acc_term > self.master.sla:
             local_reward -= (local_acc_term - self.master.sla)
         # reward = 1.5 * acc_term
         local_reward -= local_tct_term
+
+        # print(reward, local_reward)
 
         self.master.left_task_num -= 1
 
