@@ -233,16 +233,18 @@ class Env:
         local_acc_term = (local_acc - min_acc) / (max_acc - min_acc)
         local_tct_term = (local_tct - min_tct) / (max_tct - min_tct)
 
-        reward = 1 if acc_term >= self.master.sla else 0
-        if acc_term > self.master.sla:
-            reward -= (acc_term - self.master.sla)
+        sla = (self.master.sla - min_acc) / (max_acc - min_acc)
+
+        reward = 1 if acc_term >= sla else 0
+        if acc_term > sla:
+            reward -= (acc_term - sla)
         # reward = 1.5 * acc_term
         reward -= tct_term
         # print(reward)
 
-        local_reward = 1 if local_acc_term >= self.master.sla else 0
-        if local_acc_term > self.master.sla:
-            local_reward -= (local_acc_term - self.master.sla)
+        local_reward = 1 if local_acc_term >= sla else 0
+        if local_acc_term > sla:
+            local_reward -= (local_acc_term - sla)
         # reward = 1.5 * acc_term
         local_reward -= local_tct_term
 
