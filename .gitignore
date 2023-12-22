@@ -3,6 +3,7 @@
 *.tar.gz
 *.png
 *.pkl
+*.zip
 
 ./idea/
 __pycache__/

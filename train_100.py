@@ -28,6 +28,7 @@ parser.add_argument('--n_embed', default=4096, type=int, help='embedding size')
 parser.add_argument('--n_parts', default=8, type=int, help='number of parts')
 parser.add_argument('--commitment', default=1.0, type=int, help='commitment')
 parser.add_argument('--skip_quant', action='store_true', help='skip quantization')
+parser.add_argument('--quant', default='VQ', help='number of parts')
 parser.add_argument('--resume', '-r', action='store_true',
                     help='resume from checkpoint')
 args = parser.parse_args()
@@ -126,7 +127,7 @@ if __name__ == '__main__':
         exp_name = f'{args.lr}_{args.ep}_{args.skip_quant}_AdaptE'
     else:
         exp_name = (f'{args.lr}_{args.pp}_{args.ep}_{args.nu}_{args.n_embed}_{args.n_parts}_'
-                    f'{args.commitment}_{args.skip_quant}_AdaptE')
+                    f'{args.commitment}_{args.quant}_AdaptE')
     print(args)
 
     exp_path = f'./checkpoint/ckpt_{exp_name}/'
@@ -196,7 +197,7 @@ if __name__ == '__main__':
     # Model
     print('==> Building model..')
 
-    net = EnsembleNet(res_stop=args.pp, ncls=100, skip_quant=args.skip_quant,
+    net = EnsembleNet(res_stop=args.pp, ncls=100, skip_quant=args.skip_quant, quant=args.quant,
                       n_embed=args.n_embed, n_parts=args.n_parts, commitment=args.commitment)
 
     X = torch.rand(size=(2, 3, 32, 32))

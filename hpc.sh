@@ -35,3 +35,5 @@ python train_100.py --ep 100 --id -1 --skip_quant
 #  done
 #  python test_100.py --pp $PP --n_parts $NP --n_embed $EB
 #done
+
+python train_100.py --nu 5 --pp 5 --ep 100 --id -1 --quant BQ

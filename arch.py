@@ -3,6 +3,7 @@ import torch.nn as nn
 import torchvision.models as models
 
 from vector_quantize_pytorch import VectorQuantize
+from binary_quat import BinaryQuantizer
 
 import numpy as np
 
@@ -13,7 +14,7 @@ def get_num_params(net):
 
 
 class MobileNet100(nn.Module):
-    def __init__(self, encdec, n_embed=1024, n_parts=2, skip_quant=False, decay=0.8, commitment=1.0):
+    def __init__(self, encdec, n_embed=1024, n_parts=2, skip_quant=False, decay=0.8, commitment=1.0, quant='VQ'):
         super().__init__()
         self.encoder = encdec['encoder']
         self.quant_dim = self.encoder(torch.zeros(1, 3, 32, 32)).shape[1]
@@ -21,46 +22,75 @@ class MobileNet100(nn.Module):
         self.n_embed = n_embed
         self.n_parts = n_parts
         self.skip_quant = skip_quant
+        self.quant = quant
         self.decay = decay
         self.commitment = commitment
         if not self.skip_quant:
-            self.quantizer = VectorQuantize(dim=self.quant_dim // self.n_parts,
-                                            codebook_size=self.n_embed,  # size of the dictionary
-                                            decay=self.decay,  # the exponential moving average decay, lower means the
-                                            # dictionary will change faster
-                                            commitment_weight=self.commitment)
+            if quant == 'VQ':
+                self.quantizer = VectorQuantize(dim=self.quant_dim // self.n_parts,
+                                                codebook_size=self.n_embed,  # size of the dictionary
+                                                decay=self.decay,
+                                                # the exponential moving average decay, lower means the
+                                                # dictionary will change faster
+                                                commitment_weight=self.commitment)
+            else:
+                self.quantizer = BinaryQuantizer(codebook_size=128,
+                                                 emb_dim=self.quant_dim,
+                                                 num_hiddens=self.quant_dim)
 
     def quantize(self, z_e):
         if not self.skip_quant:
-            z_e_split = torch.split(z_e, self.quant_dim // self.n_parts, dim=3)
-            z_q_split, indices_split = [], []
-            commit_loss = 0
-            for z_e_part in z_e_split:
-                a, b, c, d = z_e_part.shape
-                # print(z_e_part.shape)
-                z_q_part, indices_part, commit_loss_part = self.quantizer(
-                    z_e_part.reshape(a, -1, d)
-                    # z_e_part
-                )
-                commit_loss += commit_loss_part
-                z_q_split.append(z_q_part.reshape(a, b, c, d))
-                indices_split.append(indices_part.reshape(a, b, c))
-            z_q = torch.cat(z_q_split, dim=3)
-            indices = torch.stack(indices_split, dim=3)
+            if self.quant == 'VQ':
+                z_e_split = torch.split(z_e, self.quant_dim // self.n_parts, dim=3)
+                z_q_split, indices_split = [], []
+                commit_loss = 0
+                for z_e_part in z_e_split:
+                    a, b, c, d = z_e_part.shape
+                    # print(z_e_part.shape)
+                    z_q_part, indices_part, commit_loss_part = self.quantizer(
+                        z_e_part.reshape(a, -1, d)
+                        # z_e_part
+                    )
+                    # print(z_q_part.shape, indices_part)
+                    commit_loss += commit_loss_part
+                    z_q_split.append(z_q_part.reshape(a, b, c, d))
+                    indices_split.append(indices_part.reshape(a, b, c))
+                z_q = torch.cat(z_q_split, dim=3)
+                indices = torch.stack(indices_split, dim=3)
+            else:  ## BQ
+                z_q, commit_loss, _, indices = self.quantizer(z_e)
         else:
             z_q, indices, commit_loss = z_e, None, 0
         return z_q, indices, commit_loss
 
     def forward(self, X):
+        # 2, 3, 32, 32
         X = self.encoder(X)
-        X = X.view((X.shape[0], X.shape[2], X.shape[3], X.shape[1]))
+
+        # 2, 64, 8, 8
+        if self.quant == 'VQ':
+            X = X.view((X.shape[0], X.shape[2], X.shape[3], X.shape[1]))
+
+        # 2, 8, 8, 64
         X, indices, commit_loss = self.quantize(X)
+
+        # offload = indices.detach().cpu().numpy()
+        # print(offload.shape)
+
+        # X = self.quantizer.get_codes_from_indices(indices)
+
+        # print(BB.shape)
+
+        # 2, 8, 8, 64; 2, 8, 8, 1
         # print(X.shape, indices.shape)
-        X = X.view((X.shape[0], X.shape[3], X.shape[1], X.shape[2]))
+
+        # print(X.shape, indices.shape)
+        if self.quant == 'VQ':
+            X = X.view((X.shape[0], X.shape[3], X.shape[1], X.shape[2]))
         return self.decoder(X), commit_loss
 
 
-def EnsembleNet(res_stop=5, ncls=10, skip_quant=True, n_embed=4096, n_parts=1, commitment=1.0):
+def EnsembleNet(res_stop=5, ncls=10, skip_quant=True, n_embed=4096, n_parts=1, commitment=1.0, quant='VQ'):
     cfg = [(1, 16, 1, 1),
            (6, 24, 2, 1),  # NOTE: change stride 2 -> 1 for CIFAR10
            (6, 32, 3, 1),
@@ -97,7 +127,7 @@ def EnsembleNet(res_stop=5, ncls=10, skip_quant=True, n_embed=4096, n_parts=1, c
 
     EncDec_dict = dict(encoder=nn.Sequential(*encoder_layers), decoder=nn.Sequential(*decoder_layers))
 
-    net = MobileNet100(EncDec_dict, skip_quant=skip_quant, n_embed=n_embed, n_parts=n_parts, commitment=commitment)
+    net = MobileNet100(EncDec_dict, skip_quant=skip_quant, n_embed=n_embed, n_parts=n_parts, commitment=commitment, quant=quant)
     print("Num of Parameters:", get_num_params(net))
 
     return net
@@ -118,12 +148,12 @@ if __name__ == "__main__":
     #
     # print(get_num_params(vq))
 
-    net = EnsembleNet(res_stop=8, skip_quant=False).cuda()
+    net = EnsembleNet(res_stop=8, skip_quant=False, n_embed=2048, n_parts=2, quant='BQ').cuda()
     net.eval()
     X = torch.rand(size=(2, 3, 32, 32)).cuda()
     X = net(X)
     # a = net.encoder(X)
-    # print(a.shape)
+    print(X[0].shape)
 
     # import torch.profiler as profiler
     # with profiler.profile(
