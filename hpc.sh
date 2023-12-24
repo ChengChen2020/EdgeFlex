@@ -3,7 +3,7 @@
 #SBATCH --job-name=ensemble
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=1
-#SBATCH --time=24:00:00
+#SBATCH --time=4:00:00
 #SBATCH --mem=50GB
 #SBATCH --gres=gpu:1
 #
@@ -19,7 +19,7 @@ cd /scratch/gilbreth/"$USER"/cheng/EdgeFlex || exit
 conda activate ../AdaptiveEnsemble/penv
 
 # Single Non-Quantization Model
-python train_100.py --ep 100 --id -1 --skip_quant
+#python train_100.py --ep 100 --id -1 --skip_quant
 
 # Accuracy Profiling
 #PP=5
@@ -36,4 +36,4 @@ python train_100.py --ep 100 --id -1 --skip_quant
 #  python test_100.py --pp $PP --n_parts $NP --n_embed $EB
 #done
 
-python train_100.py --nu 5 --pp 5 --ep 100 --id -1 --quant BQ
+python train_100.py --nu 5 --pp 5 --ep 100 --id -1 --quant BQ --n_embed 1024

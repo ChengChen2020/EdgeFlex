@@ -3,6 +3,7 @@
   <component name="SshConfigs">
     <configs>
       <sshConfig host="gilbreth.rcac.purdue.edu" id="2dbfcf74-c21e-4b93-ba6c-153ed5da2403" keyPath="$USER_HOME$/.ssh/id_rsa" port="22" nameFormat="DESCRIPTIVE" username="chen4384" useOpenSSHConfig="true" />
+      <sshConfig authType="PASSWORD" host="128.46.74.215" id="d90df751-6713-40cd-bb82-ebd0d310e24f" port="22" nameFormat="DESCRIPTIVE" username="dcsl" useOpenSSHConfig="true" />
     </configs>
   </component>
 </project>

@@ -34,7 +34,7 @@ class MobileNet100(nn.Module):
                                                 # dictionary will change faster
                                                 commitment_weight=self.commitment)
             else:
-                self.quantizer = BinaryQuantizer(codebook_size=128,
+                self.quantizer = BinaryQuantizer(codebook_size=self.n_embed,
                                                  emb_dim=self.quant_dim,
                                                  num_hiddens=self.quant_dim)
 
@@ -88,6 +88,21 @@ class MobileNet100(nn.Module):
         if self.quant == 'VQ':
             X = X.view((X.shape[0], X.shape[3], X.shape[1], X.shape[2]))
         return self.decoder(X), commit_loss
+
+    def offload_forward(self, X):
+
+        X = self.encoder(X)
+
+        # 2, 64, 8, 8
+        if self.quant == 'VQ':
+            X = X.view((X.shape[0], X.shape[2], X.shape[3], X.shape[1]))
+
+        # 2, 8, 8, 64
+        X, indices, commit_loss = self.quantize(X)
+
+        offload = indices.detach().cpu().numpy()
+
+        return offload
 
 
 def EnsembleNet(res_stop=5, ncls=10, skip_quant=True, n_embed=4096, n_parts=1, commitment=1.0, quant='VQ'):

@@ -16,6 +16,13 @@
           </advancedOptions>
         </fileTransfer>
       </webServer>
+      <webServer id="f1f367a9-a3bc-4dfa-a13d-10fa5faa074e" name="tx2-1">
+        <fileTransfer rootFolder="/home/dcsl/EdgeFlex" accessType="SFTP" host="128.46.74.215" port="22" sshConfigId="d90df751-6713-40cd-bb82-ebd0d310e24f" sshConfig="dcsl@128.46.74.215:22 password">
+          <advancedOptions>
+            <advancedOptions dataProtectionLevel="Private" keepAliveTimeout="0" passiveMode="true" shareSSLContext="true" />
+          </advancedOptions>
+        </fileTransfer>
+      </webServer>
     </option>
   </component>
 </project>

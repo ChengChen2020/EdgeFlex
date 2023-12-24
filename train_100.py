@@ -105,7 +105,7 @@ def test(ep):
                 state = {
                     'encoder': net.encoder.state_dict(),
                     'quantizer': net.quantizer.state_dict(),
-                    # 'decoder': net.decoder.state_dict(),
+                    'decoder': net.decoder.state_dict(),
                     'acc': acc,
                     'epoch': ep,
                 }

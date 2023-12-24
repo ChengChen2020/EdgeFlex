@@ -11,8 +11,10 @@ import torchvision.transforms as transforms
 
 # import os
 # import time
+import queue
 import argparse
-# import numpy as np
+import threading
+import numpy as np
 
 
 from arch import EnsembleNet
@@ -36,8 +38,10 @@ transform_test = transforms.Compose([
 
 testset = torchvision.datasets.CIFAR100(
     root='./data', train=False, download=True, transform=transform_test)
+# testloader = torch.utils.data.DataLoader(
+#     testset, batch_size=args.bs, shuffle=False, num_workers=1)
 testloader = torch.utils.data.DataLoader(
-    testset, batch_size=args.bs, shuffle=False, num_workers=1)
+   torch.utils.data.Subset(testset, np.arange(0, 100)), batch_size=1, shuffle=False, num_workers=1)
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
@@ -74,7 +78,7 @@ def ensemble_test(bs=100, nu=5, pp=5, n_embed=4096, n_parts=2):
 
     print(net(X)[0].shape)
 
-    num_users = nu
+    num_users = 2
     batch_size = bs
     entries = len(testloader)
     print(entries)
@@ -91,7 +95,8 @@ def ensemble_test(bs=100, nu=5, pp=5, n_embed=4096, n_parts=2):
         ens_pred = torch.max(ensemble_y_pred.data, 1)[1]
         return (ens_pred == y).sum()
 
-    for num_of_ens in range(num_users):
+    # for num_of_ens in range(num_users):
+    for num_of_ens in range(1):
 
         checkpoint = torch.load(f'{exp_path}/{num_of_ens}.pth')
         checkpoint_2 = torch.load(f'{exp_path}/-1.pth')
@@ -111,7 +116,31 @@ def ensemble_test(bs=100, nu=5, pp=5, n_embed=4096, n_parts=2):
         with torch.no_grad():
             for b, (X_test, y_test) in enumerate(testloader):
                 X_test, y_test = X_test.to(device), y_test.to(device)
+
+                result_queue = queue.Queue()
+
+                binary_strings = [format(a, '012b') for a in [pp, n_embed, n_parts]]
+
+                indices = net.offload_forward(X_test)
+
+                print(type(indices), indices.shape)
+                binary_strings.extend([format(a, '012b') for a in indices.flatten()])
+                binary_strings = ''.join(binary_strings)
+
+                # print(binary_strings)
+
+                # received_array = np.array([int(binary_strings[i:i + 12], 2) for i in range(36, 8 * 8 * 2 * 12 + 36, 12)],
+                #                           dtype=np.uint16).reshape((1, 8, 8, n_parts))
+                # print(received_array)
+
+                collab = threading.Thread(target=offloading, args=(binary_strings.encode('utf-8'), result_queue))
+                collab.start()
+
                 y_hat_tensor[num_of_ens, b, :, :], _ = net(X_test)
+
+                collab.join()
+
+                y_hat_tensor[1, b, :, :] = torch.from_numpy(result_queue.get())
 
     # for b, (X_test, y_test) in enumerate(testloader):
     #     for num_of_ens in range(num_users):
@@ -125,6 +154,7 @@ def ensemble_test(bs=100, nu=5, pp=5, n_embed=4096, n_parts=2):
             ensemble_y_hat[num_of_ens, :, :, :] = (
                 torch.mean(preds.view([num_of_ens + 1, -1]), dim=0).view([-1, batch_size, 100]))
             y_pred = ensemble_y_hat[num_of_ens, b, :, :]
+            print(y_pred.shape)
             batch_ens_corr = accuracy(y_test, y_pred)
             ensemble_accuracy_per_users[num_of_ens, b] = batch_ens_corr
 
@@ -136,6 +166,22 @@ def ensemble_test(bs=100, nu=5, pp=5, n_embed=4096, n_parts=2):
     #
     for i in range(num_users):
         print(f'Accuracy of Ensemble of {i + 1} Models: {accuracy_ensemble_tensor[i].item():.3f}%')
+
+
+def offloading(data, out_queue):
+    import socket
+    HOST = '128.46.74.215'
+    PORT = 8888
+
+    client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    client_socket.connect((HOST, PORT))
+    client_socket.sendall(data)
+
+    acknowledgement = client_socket.recv(4096)
+    result = np.frombuffer(acknowledgement, dtype=np.float32).reshape(1, 100)
+    out_queue.put(result)
+
+    client_socket.close()
 
 
 if __name__ == "__main__":
