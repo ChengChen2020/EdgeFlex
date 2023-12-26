@@ -19,7 +19,7 @@ cd /scratch/gilbreth/"$USER"/cheng/EdgeFlex || exit
 conda activate ../AdaptiveEnsemble/penv
 
 # Single Non-Quantization Model
-#python train_100.py --ep 100 --id -1 --skip_quant
+python train_tiny.py --ep 100 --id -1 --skip_quant
 
 # Accuracy Profiling
 #PP=5
@@ -36,4 +36,4 @@ conda activate ../AdaptiveEnsemble/penv
 #  python test_100.py --pp $PP --n_parts $NP --n_embed $EB
 #done
 
-python train_100.py --nu 5 --pp 5 --ep 100 --id -1 --quant BQ --n_embed 1024
+#python train_100.py --nu 5 --pp 5 --ep 100 --id -1 --quant BQ --n_embed 1024

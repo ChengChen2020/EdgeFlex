@@ -120,7 +120,7 @@ def EnsembleNet(res_stop=5, ncls=10, skip_quant=True, n_embed=4096, n_parts=1, c
     encoder_layers = []
     decoder_layers = []
 
-    X = torch.rand(size=(2, 3, 32, 32))
+    X = torch.rand(size=(2, 3, 64, 64))
 
     for layer_idx, l in enumerate(mobilenet_v2.features):
         X = l(X)
@@ -165,7 +165,7 @@ if __name__ == "__main__":
 
     net = EnsembleNet(res_stop=8, skip_quant=False, n_embed=2048, n_parts=2, quant='BQ').cuda()
     net.eval()
-    X = torch.rand(size=(2, 3, 32, 32)).cuda()
+    X = torch.rand(size=(2, 3, 64, 64)).cuda()
     X = net(X)
     # a = net.encoder(X)
     print(X[0].shape)
