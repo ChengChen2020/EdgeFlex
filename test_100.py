@@ -123,19 +123,37 @@ def ensemble_test(bs=100, nu=5, pp=5, n_embed=4096, n_parts=2):
 
                 indices = net.offload_forward(X_test)
 
-                index_length = np.log2(n_embed)
+                index_length = int(np.log2(n_embed))
 
-                print(type(indices), indices.shape)
+                print(type(indices), indices.shape, type(index_length))
                 binary_strings.extend([format(a, f'0{index_length}b') for a in indices.flatten()])
                 binary_strings = ''.join(binary_strings)
 
-                # print(binary_strings)
+                length = len(binary_strings)
+
+                print(length, binary_strings)
+
+                # Pad the binary string to make its length a multiple of 8
+                # binary_strings = binary_strings + '0' * (8 - len(binary_strings) % 8)
+
+                # Convert binary string to binary data
+                binary_data = bytes([int(binary_strings[i:i + 8], 2) for i in range(0, len(binary_strings), 8)])
+
+                print(len(binary_data), binary_data)
+
+                # binary_strings = [format(int(binary_data[i]), f'08b') for i in range(len(binary_data) - 1)]
+                # bs = ''.join(binary_strings)
+                # print(bs, len(bs))
+
+                import struct
+                # print(binary_data.encode('utf-8'))
+                # print(binary_data.decode('utf-8'))
 
                 # received_array = np.array([int(binary_strings[i:i + 12], 2) for i in range(36, 8 * 8 * 2 * 12 + 36, 12)],
                 #                           dtype=np.uint16).reshape((1, 8, 8, n_parts))
                 # print(received_array)
 
-                collab = threading.Thread(target=offloading, args=(binary_strings.encode('utf-8'), result_queue))
+                collab = threading.Thread(target=offloading, args=(binary_data, result_queue))
                 collab.start()
 
                 y_hat_tensor[num_of_ens, b, :, :], _ = net(X_test)
@@ -143,12 +161,6 @@ def ensemble_test(bs=100, nu=5, pp=5, n_embed=4096, n_parts=2):
                 collab.join()
 
                 y_hat_tensor[1, b, :, :] = torch.from_numpy(result_queue.get())
-
-    # for b, (X_test, y_test) in enumerate(testloader):
-    #     for num_of_ens in range(num_users):
-    #         preds = y_pred_tensor[:num_of_ens + 1, b, :]
-    #         ensemble_y_pred[num_of_ens, b, :] = torch.mode(preds, dim=0)[0]
-    #         ensemble_accuracy_per_users[num_of_ens, b] = ensemble_y_pred[num_of_ens, b, :].eq(y_test).sum().item()
 
     for b, (X_test, y_test) in enumerate(testloader):
         for num_of_ens in range(num_users):
@@ -172,7 +184,7 @@ def ensemble_test(bs=100, nu=5, pp=5, n_embed=4096, n_parts=2):
 
 def offloading(data, out_queue):
     import socket
-    HOST = '128.46.74.215'
+    HOST = '128.46.74.214'
     PORT = 8888
 
     client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)

@@ -19,7 +19,8 @@ while True:
 
     try:
         data = client_socket.recv(4096)
-        binary_string = data.decode('utf-8')
+        print(len(data))
+        binary_string = ''.join([format(int(data[i]), f'08b') for i in range(len(data))])
         # print(binary_string)
         pp = int(binary_string[0:16], 2)
         n_embed = int(binary_string[16:32], 2)
