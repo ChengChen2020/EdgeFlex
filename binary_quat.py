@@ -9,8 +9,12 @@ class BinaryQuantizer(nn.Module):
         act = nn.Sigmoid
         if use_tanh:
             act = nn.Tanh
-        self.proj = nn.Sequential(
+        self.proj_1 = nn.Sequential(
             nn.Conv2d(num_hiddens, codebook_size, 1),  # projects last encoder layer to quantized logits
+            act(),
+        )
+        self.proj_2 = nn.Sequential(
+            nn.Conv2d(emb_dim, num_hiddens, 1),  # projects last encoder layer to quantized logits
             act(),
         )
         self.embed = nn.Embedding(codebook_size, emb_dim)
@@ -35,7 +39,7 @@ class BinaryQuantizer(nn.Module):
 
     def forward(self, h, deterministic=False):
 
-        z = self.proj(h)
+        z = self.proj_1(h)
 
         # code_book_loss = F.binary_cross_entropy_with_logits(z, (torch.sigmoid(z.detach())>0.5)*1.0)
         code_book_loss = (torch.sigmoid(z) * (1 - torch.sigmoid(z))).mean()
@@ -46,12 +50,19 @@ class BinaryQuantizer(nn.Module):
 
         z_q = torch.einsum("b n h w, n d -> b d h w", z_flow, self.embed.weight)
 
-        return z_q, code_book_loss, {
+        return self.proj_2(z_q), code_book_loss, {
             "binary_code": z_b.detach()
         }, z_b.detach()
 
     def get_codes_from_indices(self, indices):
         return torch.einsum("b n h w, n d -> b d h w", indices, self.embed.weight)
+
+
+if __name__ == "__main__":
+    x = torch.randn(1, 16, 32, 32)
+    bq = BinaryQuantizer(codebook_size=4096, emb_dim=256, num_hiddens=16)
+    x, _, _, _ = bq(x)
+    print(x.shape)
 
 
 

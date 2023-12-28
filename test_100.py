@@ -119,12 +119,14 @@ def ensemble_test(bs=100, nu=5, pp=5, n_embed=4096, n_parts=2):
 
                 result_queue = queue.Queue()
 
-                binary_strings = [format(a, '012b') for a in [pp, n_embed, n_parts]]
+                binary_strings = [format(a, '016b') for a in [pp, n_embed, n_parts]]
 
                 indices = net.offload_forward(X_test)
 
+                index_length = np.log2(n_embed)
+
                 print(type(indices), indices.shape)
-                binary_strings.extend([format(a, '012b') for a in indices.flatten()])
+                binary_strings.extend([format(a, f'0{index_length}b') for a in indices.flatten()])
                 binary_strings = ''.join(binary_strings)
 
                 # print(binary_strings)

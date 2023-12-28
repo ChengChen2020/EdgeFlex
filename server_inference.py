@@ -21,9 +21,9 @@ while True:
         data = client_socket.recv(4096)
         binary_string = data.decode('utf-8')
         # print(binary_string)
-        pp = int(binary_string[0:12], 2)
-        n_embed = int(binary_string[12:24], 2)
-        n_parts = int(binary_string[24:36], 2)
+        pp = int(binary_string[0:16], 2)
+        n_embed = int(binary_string[16:32], 2)
+        n_parts = int(binary_string[32:48], 2)
 
         print(pp, n_embed, n_parts)
 
@@ -35,14 +35,19 @@ while True:
         net.quantizer.load_state_dict(checkpoint_2['quantizer'])
         net.decoder.load_state_dict(checkpoint['decoder'])
 
-        array_size = dim[pp] * dim[pp] * n_parts * 12 + 36
-        received_array = np.array([int(binary_string[i:i+12], 2) for i in range(36, array_size, 12)], dtype=np.int64).reshape((1, dim[pp], dim[pp], n_parts))
+        index_length = np.log2(n_embed)
+
+        array_size = dim[pp] * dim[pp] * n_parts * index_length + 48
+        received_array = np.array([int(binary_string[i:i+index_length], 2) for i in range(48, array_size, index_length)], dtype=np.int64).reshape((1, dim[pp], dim[pp], n_parts))
 
         indices = torch.from_numpy(received_array).cuda()
         X = net.quantizer.get_codes_from_indices(indices)
-        #print(X.shape)
+
         X = X.view((X.shape[0], X.shape[3], X.shape[1], X.shape[2]))
-        client_socket.sendall(net.decoder(X).detach().cpu().numpy().tobytes())
+
+        results = net.decoder(X).detach().cpu().numpy()
+        print(results.shape)
+        client_socket.sendall(results.tobytes())
 
     except KeyboardInterrupt:
         break

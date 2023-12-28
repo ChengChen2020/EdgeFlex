@@ -1,14 +1,13 @@
 #!/bin/bash
 #
 #SBATCH --job-name=ensemble
+#SBATCH --output=ensemble_12.out
 #SBATCH --nodes=1
-#SBATCH --cpus-per-task=1
-#SBATCH --time=4:00:00
-#SBATCH --mem=50GB
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=32
+#SBATCH --time=48:00:00
 #SBATCH --gres=gpu:1
-#
-#SBATCH --mail-type=END
-#SBATCH --mail-user=cc6858@nyu.edu
+#SBATCH -A schaterj-g
 
 source ~/.bashrc
 #cd /scratch/gilbreth/"$USER"/AdaptiveEnsemble || exit
@@ -18,8 +17,19 @@ source ~/chengc.sh
 cd /scratch/gilbreth/"$USER"/cheng/EdgeFlex || exit
 conda activate ../AdaptiveEnsemble/penv
 
+for PP in 5 3 8
+do
+  for NB in 2048 1024 4096
+  do
+    for NP in 4 2 1 8
+    do
+      python test_imagenet.py --pp $PP --n_parts $NP --n_embed $NB --lr 1e-4 --ep 12
+    done
+  done
+done
+
 # Single Non-Quantization Model
-python train_tiny.py --ep 100 --id -1 --skip_quant
+#python train_tiny.py --ep 100 --id -1 --skip_quant
 
 # Accuracy Profiling
 #PP=5
