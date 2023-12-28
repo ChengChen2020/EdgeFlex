@@ -102,7 +102,10 @@ class MobileNet100(nn.Module):
 
         offload = indices.detach().cpu().numpy()
 
-        return offload
+        if self.quant == 'VQ':
+            X = X.view((X.shape[0], X.shape[3], X.shape[1], X.shape[2]))
+
+        return X, offload
 
 
 def EnsembleNet(res_stop=5, ncls=10, skip_quant=True, n_embed=4096, n_parts=1, commitment=1.0, quant='VQ'):
@@ -123,8 +126,9 @@ def EnsembleNet(res_stop=5, ncls=10, skip_quant=True, n_embed=4096, n_parts=1, c
     X = torch.rand(size=(2, 3, 64, 64))
 
     for layer_idx, l in enumerate(mobilenet_v2.features):
-        X = l(X)
-        print(l.__class__.__name__, 'Output shape:\t', X.shape)
+        # X = l(X)
+        # print(l.__class__.__name__, 'Output shape:\t', X.shape)
+        # print(l.__class__.__name__)
         if layer_idx <= res_stop:
             encoder_layers.append(l)
         else:

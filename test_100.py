@@ -10,7 +10,7 @@ import torchvision
 import torchvision.transforms as transforms
 
 # import os
-# import time
+import time
 import queue
 import argparse
 import threading
@@ -114,24 +114,24 @@ def ensemble_test(bs=100, nu=5, pp=5, n_embed=4096, n_parts=2):
         # print(num_of_ens)
 
         with torch.no_grad():
+
             for b, (X_test, y_test) in enumerate(testloader):
                 X_test, y_test = X_test.to(device), y_test.to(device)
 
+                start_time = time.time()
+
                 result_queue = queue.Queue()
-
                 binary_strings = [format(a, '016b') for a in [pp, n_embed, n_parts]]
-
-                indices = net.offload_forward(X_test)
-
+                X, indices = net.offload_forward(X_test)
                 index_length = int(np.log2(n_embed))
 
                 print(type(indices), indices.shape, type(index_length))
                 binary_strings.extend([format(a, f'0{index_length}b') for a in indices.flatten()])
                 binary_strings = ''.join(binary_strings)
 
-                length = len(binary_strings)
+                # length = len(binary_strings)
 
-                print(length, binary_strings)
+                # print(length, binary_strings)
 
                 # Pad the binary string to make its length a multiple of 8
                 # binary_strings = binary_strings + '0' * (8 - len(binary_strings) % 8)
@@ -139,28 +139,22 @@ def ensemble_test(bs=100, nu=5, pp=5, n_embed=4096, n_parts=2):
                 # Convert binary string to binary data
                 binary_data = bytes([int(binary_strings[i:i + 8], 2) for i in range(0, len(binary_strings), 8)])
 
-                print(len(binary_data), binary_data)
+                # print(len(binary_data), binary_data)
 
                 # binary_strings = [format(int(binary_data[i]), f'08b') for i in range(len(binary_data) - 1)]
                 # bs = ''.join(binary_strings)
                 # print(bs, len(bs))
 
-                import struct
-                # print(binary_data.encode('utf-8'))
-                # print(binary_data.decode('utf-8'))
-
-                # received_array = np.array([int(binary_strings[i:i + 12], 2) for i in range(36, 8 * 8 * 2 * 12 + 36, 12)],
-                #                           dtype=np.uint16).reshape((1, 8, 8, n_parts))
-                # print(received_array)
-
                 collab = threading.Thread(target=offloading, args=(binary_data, result_queue))
                 collab.start()
 
-                y_hat_tensor[num_of_ens, b, :, :], _ = net(X_test)
+                y_hat_tensor[num_of_ens, b, :, :] = net.decoder(X)
 
                 collab.join()
 
                 y_hat_tensor[1, b, :, :] = torch.from_numpy(result_queue.get())
+
+                print(time.time() - start_time)
 
     for b, (X_test, y_test) in enumerate(testloader):
         for num_of_ens in range(num_users):
@@ -168,7 +162,7 @@ def ensemble_test(bs=100, nu=5, pp=5, n_embed=4096, n_parts=2):
             ensemble_y_hat[num_of_ens, :, :, :] = (
                 torch.mean(preds.view([num_of_ens + 1, -1]), dim=0).view([-1, batch_size, 100]))
             y_pred = ensemble_y_hat[num_of_ens, b, :, :]
-            print(y_pred.shape)
+            # print(y_pred.shape)
             batch_ens_corr = accuracy(y_test, y_pred)
             ensemble_accuracy_per_users[num_of_ens, b] = batch_ens_corr
 

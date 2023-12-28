@@ -139,6 +139,7 @@ def train_quantizer(pp, nb, np, lr, ep, trainloader, testloader):
 
         print('\nEpoch: %d' % epoch)
         net.module.quantizer.train()
+        net.module.decoder.train()
 
         train_loss = 0
         correct = 0
@@ -165,6 +166,7 @@ def train_quantizer(pp, nb, np, lr, ep, trainloader, testloader):
         scheduler.step()
 
         net.module.quantizer.eval()
+        net.module.decoder.eval()
 
         test_loss = 0
         correct = 0

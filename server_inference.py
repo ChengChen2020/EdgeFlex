@@ -10,6 +10,10 @@ PORT = 8888
 
 dim = {3: 16, 5: 16, 8: 8}
 
+# 16 * 16 * 8 * 12 / 8
+
+# 3KB
+
 server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 server_socket.bind((HOST, PORT))
 server_socket.listen()
@@ -36,7 +40,7 @@ while True:
         net.quantizer.load_state_dict(checkpoint_2['quantizer'])
         net.decoder.load_state_dict(checkpoint['decoder'])
 
-        index_length = np.log2(n_embed)
+        index_length = int(np.log2(n_embed))
 
         array_size = dim[pp] * dim[pp] * n_parts * index_length + 48
         received_array = np.array([int(binary_string[i:i+index_length], 2) for i in range(48, array_size, index_length)], dtype=np.int64).reshape((1, dim[pp], dim[pp], n_parts))
@@ -48,6 +52,7 @@ while True:
 
         results = net.decoder(X).detach().cpu().numpy()
         print(results.shape)
+        print(len(results.tobytes()))
         client_socket.sendall(results.tobytes())
 
     except KeyboardInterrupt:

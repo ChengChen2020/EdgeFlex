@@ -6,7 +6,7 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=32
 #SBATCH --time=48:00:00
-#SBATCH --gres=gpu:1
+#SBATCH --gres=gpu:2
 #SBATCH -A schaterj-g
 
 source ~/.bashrc
@@ -23,7 +23,8 @@ do
   do
     for NP in 4 2 1 8
     do
-      python test_imagenet.py --pp $PP --n_parts $NP --n_embed $NB --lr 1e-4 --ep 12
+      echo $PP $NP $NB
+      python test_imagenet.py --pp $PP --n_parts $NP --n_embed $NB --lr 1e-4 --ep 30
     done
   done
 done
