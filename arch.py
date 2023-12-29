@@ -100,12 +100,10 @@ class MobileNet100(nn.Module):
         # 2, 8, 8, 64
         X, indices, commit_loss = self.quantize(X)
 
-        offload = indices.detach().cpu().numpy()
-
         if self.quant == 'VQ':
             X = X.view((X.shape[0], X.shape[3], X.shape[1], X.shape[2]))
 
-        return X, offload
+        return X, indices
 
 
 def EnsembleNet(res_stop=5, ncls=10, skip_quant=True, n_embed=4096, n_parts=1, commitment=1.0, quant='VQ'):
@@ -147,7 +145,7 @@ def EnsembleNet(res_stop=5, ncls=10, skip_quant=True, n_embed=4096, n_parts=1, c
     EncDec_dict = dict(encoder=nn.Sequential(*encoder_layers), decoder=nn.Sequential(*decoder_layers))
 
     net = MobileNet100(EncDec_dict, skip_quant=skip_quant, n_embed=n_embed, n_parts=n_parts, commitment=commitment, quant=quant)
-    print("Num of Parameters:", get_num_params(net))
+    # print("Num of Parameters:", get_num_params(net))
 
     return net
 

@@ -208,7 +208,9 @@ if __name__ == '__main__':
         # Load checkpoint.
         print('==> Resuming from checkpoint..')
         assert os.path.isdir('checkpoint'), 'Error: no checkpoint directory found!'
-        checkpoint = torch.load(f'{exp_path}/-1.pth')
+        # checkpoint = torch.load(f'{exp_path}/-1.pth')
+
+        checkpoint = torch.load(f'Config_5_2048_1_0.0001.pth')
 
         net.encoder.load_state_dict(checkpoint['encoder'])
         for param in net.encoder.parameters():
