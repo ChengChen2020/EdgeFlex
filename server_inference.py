@@ -29,13 +29,16 @@ checkpoint_2 = torch.load(f'{exp_path}/-1.pth')
 net.quantizer.load_state_dict(checkpoint_2['quantizer'])
 net.decoder.load_state_dict(checkpoint['decoder'])
 
+net.eval()
+
 client_socket, addr = server_socket.accept()
 
 while True:
 
     try:
         data = client_socket.recv(4096)
-        print(len(data))
+        # print(data)
+        # print(len(data))
 
         if not data:
             break
@@ -46,7 +49,7 @@ while True:
         n_embed = int(binary_string[16:32], 2)
         n_parts = int(binary_string[32:48], 2)
 
-        # print(pp, n_embed, n_parts)
+        print(pp, n_embed, n_parts)
 
         index_length = int(np.log2(n_embed))
 
@@ -55,16 +58,17 @@ while True:
 
         indices = torch.from_numpy(received_array).cuda()
 
-        print(indices.shape)
-        X = net.quantizer.get_codes_from_indices(indices)
-        print(X.shape)
+        with torch.no_grad():
+            # print(net.quantizer.codebook)
+            X = net.quantizer.get_codes_from_indices(indices)
+            # print(X)
 
-        X = X.view((X.shape[0], X.shape[3], X.shape[1], X.shape[2]))
+            X = X.view((X.shape[0], X.shape[3], X.shape[1], X.shape[2]))
 
-        results = net.decoder(X).detach().cpu().numpy()
-        print(results)
+            results = net.decoder(X)
+        # print(results)
         # print(len(results.tobytes()))
-        client_socket.sendall(results.tobytes())
+        client_socket.sendall(results.detach().cpu().numpy().tobytes())
 
     except KeyboardInterrupt:
         break

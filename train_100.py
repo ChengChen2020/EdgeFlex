@@ -130,7 +130,7 @@ if __name__ == '__main__':
                     f'{args.commitment}_{args.quant}_AdaptE')
     print(args)
 
-    exp_path = f'./checkpoint/ckpt_{exp_name}/'
+    exp_path = f'./checkpoint_imagenet/ckpt_{exp_name}/'
     os.makedirs(exp_path, exist_ok=True)
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -210,18 +210,20 @@ if __name__ == '__main__':
         assert os.path.isdir('checkpoint'), 'Error: no checkpoint directory found!'
         # checkpoint = torch.load(f'{exp_path}/-1.pth')
 
-        checkpoint = torch.load(f'Config_5_2048_1_0.0001.pth')
+        checkpoint = torch.load(f'Config_5_2048_4_0.0001.pth')
 
         net.encoder.load_state_dict(checkpoint['encoder'])
         for param in net.encoder.parameters():
             param.requires_grad = False
         net.encoder.eval()
+        print('==> Loading Encoder Done..')
 
         if not args.skip_quant:
             net.quantizer.load_state_dict(checkpoint['quantizer'])
             for param in net.quantizer.parameters():
                 param.requires_grad = False
             net.quantizer.eval()
+            print('==> Loading Quantizer Done..')
 
         # net.decoder.load_state_dict(checkpoint['decoder'])
 
@@ -236,7 +238,7 @@ if __name__ == '__main__':
 
     optimizer = torch.optim.Adam(net.parameters(), lr=args.lr)
     if args.id == -1:
-        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.9)
+        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=3, gamma=0.9)
     else:
         scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=3, gamma=0.9)
 

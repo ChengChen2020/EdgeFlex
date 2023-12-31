@@ -91,7 +91,7 @@ def ensemble_test(bs=100, nu=5, pp=5, n_embed=4096, n_parts=2):
         return (ens_pred == y).sum()
 
     # for num_of_ens in range(num_users):
-    for num_of_ens in range(2):
+    for num_of_ens in range(1):
 
         checkpoint = torch.load(f'{exp_path}/{num_of_ens}.pth')
         checkpoint_2 = torch.load(f'{exp_path}/-1.pth')
@@ -124,6 +124,7 @@ def ensemble_test(bs=100, nu=5, pp=5, n_embed=4096, n_parts=2):
         with torch.no_grad():
 
             time_list = []
+            result_queue = queue.Queue()
 
             for b, (X_test, y_test) in enumerate(testloader):
                 X_test, y_test = X_test.to(device), y_test.to(device)
@@ -132,7 +133,6 @@ def ensemble_test(bs=100, nu=5, pp=5, n_embed=4096, n_parts=2):
 
                     start_time = time.time()
 
-                    result_queue = queue.Queue()
                     binary_strings = [format(a, '016b') for a in [pp, n_embed, n_parts]]
                     X, indices = net.offload_forward(X_test)
                     indices = indices.detach().cpu().numpy()
@@ -151,6 +151,7 @@ def ensemble_test(bs=100, nu=5, pp=5, n_embed=4096, n_parts=2):
 
                     # Convert binary string to binary data
                     binary_data = bytes([int(binary_strings[i:i + 8], 2) for i in range(0, len(binary_strings), 8)])
+                    # print(binary_data)
 
                     # print(len(binary_data), binary_data)
 
@@ -161,11 +162,16 @@ def ensemble_test(bs=100, nu=5, pp=5, n_embed=4096, n_parts=2):
                     collab = threading.Thread(target=offloading, args=(client_socket, binary_data, result_queue))
                     collab.start()
 
-                    y_hat_tensor[num_of_ens, b, :, :] = net.decoder(X)
+                    local_results = net.decoder(X)
+
+                    y_hat_tensor[num_of_ens, b, :, :] = local_results
 
                     collab.join()
 
-                    y_hat_tensor[1, b, :, :] = torch.from_numpy(result_queue.get())
+                    offload_results = result_queue.get()
+                    # print(offload_results)
+
+                    y_hat_tensor[1, b, :, :] = torch.from_numpy(offload_results)
 
                     ct = time.time() - start_time
                     time_list.append(ct)
@@ -174,15 +180,44 @@ def ensemble_test(bs=100, nu=5, pp=5, n_embed=4096, n_parts=2):
                     # results = net(X_test)[0]
                     print(X_test.shape)
                     _, indices = net.offload_forward(X_test)
-                    print(indices.shape)
+
+                    binary_strings = [format(a, '016b') for a in [pp, n_embed, n_parts]]
+                    X, indices = net.offload_forward(X_test)
+                    indices = indices.detach().cpu().numpy()
+                    index_length = int(np.log2(n_embed))
+
+                    print(b, type(indices), indices.shape, type(index_length))
+                    binary_strings.extend([format(a, f'0{index_length}b') for a in indices.flatten()])
+                    binary_strings = ''.join(binary_strings)
+
+                    binary_data = bytes([int(binary_strings[i:i + 8], 2) for i in range(0, len(binary_strings), 8)])
+
+                    # OFFLOADING
+
+                    binary_string = ''.join([format(int(binary_data[i]), f'08b') for i in range(len(binary_data))])
+                    # print(binary_string)
+                    pp = int(binary_string[0:16], 2)
+                    n_embed = int(binary_string[16:32], 2)
+                    n_parts = int(binary_string[32:48], 2)
+
+                    # print(pp, n_embed, n_parts)
+
+                    index_length = int(np.log2(n_embed))
+
+                    array_size = 16 * 16 * n_parts * index_length + 48
+                    received_array = np.array(
+                        [int(binary_string[i:i + index_length], 2) for i in range(48, array_size, index_length)],
+                        dtype=np.int64).reshape((1, 16, 16, n_parts))
+
+                    indices = torch.from_numpy(received_array).cuda()
+
                     # from einops import rearrange
                     # print(net.quantizer.codebook.shape)
                     # X = rearrange(net.quantizer.codebook[torch.from_numpy(indices)], '... h d -> ... (h d)')
                     X = net.quantizer.get_codes_from_indices(indices)
-                    print(X.shape)
                     X = X.view((X.shape[0], X.shape[3], X.shape[1], X.shape[2]))
                     results = net.decoder(X)
-                    print(results)
+                    # print(results)
                     y_hat_tensor[num_of_ens, b, :, :] = results
 
         if args.off:
