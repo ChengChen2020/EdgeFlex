@@ -1,11 +1,11 @@
 #!/bin/bash
 #
 #SBATCH --job-name=ensemble
-#SBATCH --output=ensemble_4.out
+#SBATCH --output=ensemble_38.out
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=32
-#SBATCH --time=96:00:00
+#SBATCH --time=200:00:00
 #SBATCH --gres=gpu:2
 #SBATCH -A schaterj-g
 
@@ -17,9 +17,9 @@ source ~/chengc.sh
 cd /scratch/gilbreth/"$USER"/cheng/EdgeFlex || exit
 conda activate ../AdaptiveEnsemble/penv
 
-for PP in 5 3 8
+for PP in 3 8
 do
-  for NB in 1024 4096
+  for NB in 2048 1024 4096
   do
     for NP in 4 2 1 8
     do

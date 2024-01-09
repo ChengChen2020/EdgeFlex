@@ -210,7 +210,7 @@ if __name__ == '__main__':
         assert os.path.isdir('checkpoint'), 'Error: no checkpoint directory found!'
         # checkpoint = torch.load(f'{exp_path}/-1.pth')
 
-        checkpoint = torch.load(f'Config_5_2048_4_0.0001.pth')
+        checkpoint = torch.load(f'Config_5_4096_8_0.0001.pth')
 
         net.encoder.load_state_dict(checkpoint['encoder'])
         for param in net.encoder.parameters():
